@@ -61,6 +61,7 @@ export default function MealDeals() {
   };
 
   const handleVote = async (dealId, dir) => {
+    if (!user) { setAuthModal("login"); return; }
     const key = `${dealId}-${dir}`;
     const opposite = `${dealId}-${dir === "up" ? "down" : "up"}`;
     const wasVoted = votedDeals[key];
