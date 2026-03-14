@@ -30,7 +30,7 @@ export default function MealDeals() {
     catch { return {}; }
   });
   const [mealFilter, setMealFilter] = useState("All");
-  const [sortBy, setSortBy] = useState("top");
+
   const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
   const [postForm, setPostForm] = useState({
@@ -142,7 +142,7 @@ export default function MealDeals() {
     if (searchQuery && !d.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !d.restaurant.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
-  }).sort((a, b) => sortBy === "top" ? b.votes - a.votes : new Date(b.created_at) - new Date(a.created_at));
+  }).sort((a, b) => b.votes - a.votes);
 
   const openDeal = deals.find(d => d.id === selectedDeal);
 
@@ -264,13 +264,6 @@ export default function MealDeals() {
             {MEAL_TIMES.map(t => (
               <button key={t} style={mealFilter === t ? styles.chipActive : styles.chip} onClick={() => setMealFilter(t)}>{t}</button>
             ))}
-          </div>
-          <div style={styles.sortRow}>
-            Sort:
-            {["top", "new"].map(s => (
-              <button key={s} style={sortBy === s ? styles.sortBtnActive : styles.sortBtn} onClick={() => setSortBy(s)}>{s === "top" ? "Top" : "New"}</button>
-            ))}
-            <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-faint)" }}>{filteredDeals.length} deals</span>
           </div>
 
           {loading && <div style={styles.emptyState}><div style={{ fontSize: 13 }}>Loading deals...</div></div>}
