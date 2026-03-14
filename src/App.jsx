@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import MapView from "./MapView";
 
@@ -536,21 +536,50 @@ export default function MealDeals() {
   );
 }
 
+// Replace with your Cloudflare Turnstile site key from https://dash.cloudflare.com/
+// Also enable CAPTCHA in your Supabase dashboard under Authentication > Settings
+const TURNSTILE_SITE_KEY = "YOUR_TURNSTILE_SITE_KEY";
+
 function AuthModal({ mode, onClose, onSwitch }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const captchaRef = useRef(null);
+  const widgetIdRef = useRef(null);
+
+  useEffect(() => {
+    const tryRender = () => {
+      if (captchaRef.current && window.turnstile) {
+        widgetIdRef.current = window.turnstile.render(captchaRef.current, {
+          sitekey: TURNSTILE_SITE_KEY,
+          callback: (token) => setCaptchaToken(token),
+          "expired-callback": () => setCaptchaToken(null),
+          "error-callback": () => setCaptchaToken(null),
+        });
+      } else {
+        setTimeout(tryRender, 100);
+      }
+    };
+    tryRender();
+    return () => {
+      if (widgetIdRef.current != null && window.turnstile) {
+        window.turnstile.remove(widgetIdRef.current);
+      }
+    };
+  }, []);
 
   const handleSubmit = async () => {
+    if (!captchaToken) { setError("Please complete the CAPTCHA."); return; }
     setError("");
     setLoading(true);
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({ email, password, options: { captchaToken } });
       if (error) setError(error.message);
       else onClose();
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
       if (error) setError(error.message);
       else onClose();
     }
@@ -575,7 +604,8 @@ function AuthModal({ mode, onClose, onSwitch }) {
         <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleSubmit()} />
         {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
-        <button style={btnStyle} onClick={handleSubmit} disabled={loading}>
+        <div ref={captchaRef} style={{ marginBottom: 10 }} />
+        <button style={btnStyle} onClick={handleSubmit} disabled={loading || !captchaToken}>
           {loading ? "..." : mode === "signup" ? "Sign up" : "Log in"}
         </button>
         <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", marginTop: 14 }}>
