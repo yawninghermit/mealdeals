@@ -15,7 +15,7 @@ const mapDeal = (d) => ({
 
 const username = (user) => user?.email?.split("@")[0] ?? "anonymous";
 
-const MEAL_TIMES = ["All", "Breakfast", "Lunch", "Dinner", "Happy Hour"];
+const MEAL_TIMES = ["All", "Breakfast", "Lunch", "Dinner"];
 const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
 export default function MealDeals() {
@@ -304,7 +304,7 @@ export default function MealDeals() {
 
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "var(--text)" }}>Browse by meal time</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 24 }}>
-            {[["🌅","Breakfast"],["☀️","Lunch"],["🌙","Dinner"],["🍺","Happy Hour"]].map(([icon,name]) => (
+            {[["🌅","Breakfast"],["☀️","Lunch"],["🌙","Dinner"]].map(([icon,name]) => (
               <div key={name} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 8px", textAlign: "center", cursor: "pointer" }}
                 onClick={() => { setMealFilter(name); setScreen("home"); }}>
                 <div style={{ fontSize: 24, marginBottom: 6 }}>{icon}</div>
@@ -467,7 +467,7 @@ export default function MealDeals() {
             <div style={styles.sectionLabel}>Meal time</div>
             <div style={styles.field}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {["Breakfast","Lunch","Dinner","Happy Hour","Late Night"].map(m => (
+                {["Breakfast","Lunch","Dinner"].map(m => (
                   <button key={m} style={postForm.mealTime === m ? styles.chipActive : styles.chip} onClick={() => setPostForm(p => ({ ...p, mealTime: m }))}>{m}</button>
                 ))}
               </div>
