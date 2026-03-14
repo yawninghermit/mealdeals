@@ -1,84 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-const SAMPLE_DEALS = [
-  {
-    id: 1, title: "Meatball Monday — 2 subs for $10", restaurant: "McLanahan's",
-    price: "$10", normalPrice: "$16", category: "Subs", mealTime: "Lunch",
-    description: "Every Monday 11am–3pm. Each sub comes with chips and a fountain drink. Meatball or chicken parm — both are massive, easily shareable. Cash preferred but card works.",
-    votes: 142, distance: "0.4 mi", days: ["Mo"], hours: "11am–3pm",
-    includes: ["Drink", "Side"], verified: true,
-    comments: [
-      { id: 1, user: "hungry_nittany", text: "Portion size is massive. The meatball sub alone is like 12 inches. 100% worth it, gets crowded around noon though.", votes: 34 },
-      { id: 2, user: "deals_daily", text: "Does the drink include iced coffee or just fountain? Went last week and wasn't sure.", votes: 8 },
-      { id: 3, user: "psu_eats", text: "Fountain only but free refills. Still a great deal honestly.", votes: 21 },
-    ]
-  },
-  {
-    id: 2, title: "$7 chili buffet — all you can eat", restaurant: "Rathskeller",
-    price: "$7", normalPrice: null, category: "American", mealTime: "Lunch",
-    description: "Runs Wed 11:30am–4pm. All-you-can-eat chili, cornbread, and toppings bar. Add a $3 Stella pint and you're fed and happy for under $10.",
-    votes: 87, distance: "0.8 mi", days: ["We"], hours: "11:30am–4pm",
-    includes: ["Refills"], verified: false,
-    comments: [
-      { id: 1, user: "rath_regular", text: "Been going here for 2 years. Never disappoints. The cornbread alone is worth it.", votes: 19 },
-    ]
-  },
-  {
-    id: 3, title: "$1 pizza slices weekday lunch", restaurant: "Giuseppe's Pizzeria",
-    price: "$1/slice", normalPrice: null, category: "Pizza", mealTime: "Lunch",
-    description: "Weekday lunch special. Plain and pepperoni only. Usually sells out by 1pm so get there early. Cash preferred.",
-    votes: 54, distance: "1.1 mi", days: ["Mo","Tu","We","Th","Fr"], hours: "11am–1pm",
-    includes: [], verified: true,
-    comments: [
-      { id: 1, user: "pizzawatch_psu", text: "Get there before 12:30 or forget it. Slices are gone fast.", votes: 45 },
-      { id: 2, user: "slice_hunter", text: "Tried going at 1:15 last Tuesday. Completely sold out. Go early.", votes: 28 },
-    ]
-  },
-  {
-    id: 4, title: "Wing Wednesday — 50¢ wings", restaurant: "Café 210 West",
-    price: "50¢/wing", normalPrice: null, category: "Wings", mealTime: "Dinner",
-    description: "Every Wednesday starting at 5pm. 10 sauce options. Min order of 10 wings. Pairs great with their $3 draft specials running the same night.",
-    votes: 201, distance: "0.5 mi", days: ["We"], hours: "5pm–close",
-    includes: ["Drink"], verified: true,
-    comments: [
-      { id: 1, user: "wing_king_814", text: "Best wings in State College, not even close. Buffalo garlic is the move.", votes: 67 },
-    ]
-  },
-  {
-    id: 5, title: "Lunch bowl + drink daily special", restaurant: "Penn Pide",
-    price: "$9", normalPrice: "$15", category: "Mediterranean", mealTime: "Lunch",
-    description: "Daily lunch special includes a rice bowl or wrap, side salad, and fountain drink. Lamb, chicken, or falafel options. Great portion size.",
-    votes: 31, distance: "0.6 mi", days: ["Mo","Tu","We","Th","Fr"], hours: "11am–3pm",
-    includes: ["Drink", "Side"], verified: false,
-    comments: []
-  },
-  {
-    id: 6, title: "Happy hour half-price apps", restaurant: "Applebee's",
-    price: "50% off", normalPrice: null, category: "American", mealTime: "Happy Hour",
-    description: "Mon–Fri 3–6pm. Half off all appetizers. Boneless wings, mozzarella sticks, loaded fries — all half price. Great for a group.",
-    votes: 44, distance: "1.8 mi", days: ["Mo","Tu","We","Th","Fr"], hours: "3pm–6pm",
-    includes: [], verified: false,
-    comments: [
-      { id: 1, user: "applebees_fan", text: "The half price boneless wings are actually solid. 8 for like $6.", votes: 12 },
-    ]
-  },
-  {
-    id: 7, title: "$3 cheeseburgers — quarter pound", restaurant: "Brother's Bar & Grill",
-    price: "$3", normalPrice: null, category: "Burgers", mealTime: "Dinner",
-    description: "Quarter pound before cooking. Your choice of cheese, plus lettuce, tomato, onion, and pickle. Ketchup and mustard on the side. One of the best burger deals downtown — hard to beat for $3.",
-    votes: 0, distance: "downtown", days: [], hours: "Check with bar",
-    includes: [], verified: true,
-    comments: []
-  },
-  {
-    id: 8, title: "$1 tacos every Sunday at noon", restaurant: "Champs Bar & Grill",
-    price: "$1", normalPrice: null, category: "Tacos", mealTime: "Lunch",
-    description: "Every Sunday starting at noon. Rotating meat each week — you never know what you're getting until you show up. Minimal toppings, but at $1 a taco you can stack up as many as you want.",
-    votes: 0, distance: "downtown", days: ["Su"], hours: "Sundays from noon",
-    includes: [], verified: true,
-    comments: []
-  },
-];
+const supabase = createClient(
+  "https://scohfrcegjmqyboayptu.supabase.co",
+  "sb_publishable_Iddht1KXvcpvnhlYNlkDWA_s2dq3L7K"
+);
+
+const mapDeal = (d) => ({
+  ...d,
+  mealTime: d.meal_time,
+  normalPrice: d.normal_price,
+  comments: (d.comments || []).map(c => ({ ...c, user: c.username, votes: 0 })),
+});
 
 const CATEGORIES = ["All", "Pizza", "Wings", "Subs", "Burgers", "Tacos", "Mediterranean", "American", "Breakfast"];
 const MEAL_TIMES = ["All", "Breakfast", "Lunch", "Dinner", "Happy Hour"];
@@ -87,8 +20,12 @@ const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 export default function MealDeals() {
   const [screen, setScreen] = useState("home");
   const [selectedDeal, setSelectedDeal] = useState(null);
-  const [deals, setDeals] = useState(SAMPLE_DEALS);
-  const [votedDeals, setVotedDeals] = useState({});
+  const [deals, setDeals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [votedDeals, setVotedDeals] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("votedDeals") || "{}"); }
+    catch { return {}; }
+  });
   const [mealFilter, setMealFilter] = useState("All");
   const [catFilter, setCatFilter] = useState("All");
   const [sortBy, setSortBy] = useState("top");
@@ -100,44 +37,80 @@ export default function MealDeals() {
   });
   const [postSuccess, setPostSuccess] = useState(false);
 
-  const handleVote = (dealId, dir) => {
+  useEffect(() => { fetchDeals(); }, []);
+
+  const fetchDeals = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("deals")
+      .select("*, comments(*)")
+      .order("votes", { ascending: false });
+    if (!error && data) setDeals(data.map(mapDeal));
+    setLoading(false);
+  };
+
+  const handleVote = async (dealId, dir) => {
     const key = `${dealId}-${dir}`;
     const opposite = `${dealId}-${dir === "up" ? "down" : "up"}`;
-    setDeals(prev => prev.map(d => {
-      if (d.id !== dealId) return d;
-      const wasVoted = votedDeals[key];
-      const wasOpposite = votedDeals[opposite];
-      const delta = wasVoted ? (dir === "up" ? -1 : 1) : (dir === "up" ? 1 : -1);
-      const extra = wasOpposite ? (dir === "up" ? 1 : -1) : 0;
-      return { ...d, votes: d.votes + delta + extra };
-    }));
-    setVotedDeals(prev => {
-      const next = { ...prev };
-      const opposite2 = `${dealId}-${dir === "up" ? "down" : "up"}`;
-      if (next[key]) { delete next[key]; }
-      else { next[key] = true; delete next[opposite2]; }
-      return next;
-    });
+    const wasVoted = votedDeals[key];
+    const wasOpposite = votedDeals[opposite];
+    const delta = wasVoted ? (dir === "up" ? -1 : 1) : (dir === "up" ? 1 : -1);
+    const extra = wasOpposite ? (dir === "up" ? 1 : -1) : 0;
+    const totalDelta = delta + extra;
+
+    setDeals(prev => prev.map(d => d.id === dealId ? { ...d, votes: d.votes + totalDelta } : d));
+
+    const newVoted = { ...votedDeals };
+    if (newVoted[key]) { delete newVoted[key]; }
+    else { newVoted[key] = true; delete newVoted[opposite]; }
+    setVotedDeals(newVoted);
+    localStorage.setItem("votedDeals", JSON.stringify(newVoted));
+
+    await supabase.rpc("increment_votes", { deal_id: dealId, delta: totalDelta });
   };
 
-  const handleComment = (dealId) => {
+  const handleComment = async (dealId) => {
     if (!newComment.trim()) return;
-    setDeals(prev => prev.map(d => {
-      if (d.id !== dealId) return d;
-      return { ...d, comments: [...d.comments, { id: Date.now(), user: "you", text: newComment.trim(), votes: 0 }] };
-    }));
+    const text = newComment.trim();
     setNewComment("");
+    const { data, error } = await supabase
+      .from("comments")
+      .insert({ deal_id: dealId, username: "you", text })
+      .select()
+      .single();
+    if (!error && data) {
+      setDeals(prev => prev.map(d =>
+        d.id === dealId ? { ...d, comments: [...d.comments, { ...data, user: data.username, votes: 0 }] } : d
+      ));
+    }
   };
 
-  const handlePostDeal = () => {
+  const handlePostDeal = async () => {
     if (!postForm.title || !postForm.restaurant || !postForm.price) return;
-    const newDeal = {
-      id: Date.now(), ...postForm, votes: 1, distance: "near you",
-      hours: "See description", verified: false, comments: [], normalPrice: null
-    };
-    setDeals(prev => [newDeal, ...prev]);
-    setPostSuccess(true);
-    setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
+    const { data, error } = await supabase
+      .from("deals")
+      .insert({
+        title: postForm.title,
+        restaurant: postForm.restaurant,
+        price: postForm.price,
+        description: postForm.description,
+        category: postForm.category,
+        meal_time: postForm.mealTime,
+        days: postForm.days,
+        includes: postForm.includes,
+        votes: 1,
+        distance: "near you",
+        hours: "See description",
+        verified: false,
+        normal_price: null,
+      })
+      .select("*, comments(*)")
+      .single();
+    if (!error && data) {
+      setDeals(prev => [mapDeal(data), ...prev]);
+      setPostSuccess(true);
+      setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
+    }
   };
 
   const toggleDay = (day) => {
@@ -158,7 +131,7 @@ export default function MealDeals() {
     if (searchQuery && !d.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !d.restaurant.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
-  }).sort((a, b) => sortBy === "top" ? b.votes - a.votes : b.id - a.id);
+  }).sort((a, b) => sortBy === "top" ? b.votes - a.votes : new Date(b.created_at) - new Date(a.created_at));
 
   const openDeal = deals.find(d => d.id === selectedDeal);
 
@@ -282,7 +255,13 @@ export default function MealDeals() {
             <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-faint)" }}>{filteredDeals.length} deals</span>
           </div>
 
-          {filteredDeals.length === 0 && (
+          {loading && (
+            <div style={styles.emptyState}>
+              <div style={{ fontSize: 13 }}>Loading deals...</div>
+            </div>
+          )}
+
+          {!loading && filteredDeals.length === 0 && (
             <div style={styles.emptyState}>
               <div style={{ fontSize: 32, marginBottom: 10 }}>🍽️</div>
               <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No deals found</div>
@@ -290,7 +269,7 @@ export default function MealDeals() {
             </div>
           )}
 
-          {filteredDeals.map(deal => (
+          {!loading && filteredDeals.map(deal => (
             <DealCard key={deal.id} deal={deal} styles={styles} votedDeals={votedDeals}
               onVote={handleVote} onClick={() => { setSelectedDeal(deal.id); setScreen("deal"); }} />
           ))}
