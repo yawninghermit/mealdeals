@@ -15,7 +15,6 @@ const mapDeal = (d) => ({
 
 const username = (user) => user?.email?.split("@")[0] ?? "anonymous";
 
-const CATEGORIES = ["All", "Pizza", "Wings", "Subs", "Burgers", "Tacos", "Mediterranean", "American", "Breakfast"];
 const MEAL_TIMES = ["All", "Breakfast", "Lunch", "Dinner", "Happy Hour"];
 const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
@@ -31,13 +30,12 @@ export default function MealDeals() {
     catch { return {}; }
   });
   const [mealFilter, setMealFilter] = useState("All");
-  const [catFilter, setCatFilter] = useState("All");
   const [sortBy, setSortBy] = useState("top");
   const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
   const [postForm, setPostForm] = useState({
     title: "", restaurant: "", price: "", description: "",
-    category: "Pizza", mealTime: "Lunch", days: [], includes: []
+    mealTime: "Lunch", days: [], includes: []
   });
   const [postSuccess, setPostSuccess] = useState(false);
 
@@ -107,7 +105,6 @@ export default function MealDeals() {
         restaurant: postForm.restaurant,
         price: postForm.price,
         description: postForm.description,
-        category: postForm.category,
         meal_time: postForm.mealTime,
         days: postForm.days,
         includes: postForm.includes,
@@ -123,7 +120,7 @@ export default function MealDeals() {
     if (!error && data) {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
-      setPostForm({ title: "", restaurant: "", price: "", description: "", category: "Pizza", mealTime: "Lunch", days: [], includes: [] });
+      setPostForm({ title: "", restaurant: "", price: "", description: "", mealTime: "Lunch", days: [], includes: [] });
       setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
     }
   };
@@ -142,7 +139,6 @@ export default function MealDeals() {
 
   const filteredDeals = deals.filter(d => {
     if (mealFilter !== "All" && d.mealTime !== mealFilter) return false;
-    if (catFilter !== "All" && d.category !== catFilter) return false;
     if (searchQuery && !d.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !d.restaurant.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
@@ -269,12 +265,6 @@ export default function MealDeals() {
               <button key={t} style={mealFilter === t ? styles.chipActive : styles.chip} onClick={() => setMealFilter(t)}>{t}</button>
             ))}
           </div>
-          <div style={{ ...styles.filterBar, marginBottom: 16 }}>
-            {CATEGORIES.map(c => (
-              <button key={c} style={catFilter === c ? styles.chipActive : styles.chip} onClick={() => setCatFilter(c)}>{c}</button>
-            ))}
-          </div>
-
           <div style={styles.sortRow}>
             Sort:
             {["top", "new"].map(s => (
@@ -319,11 +309,11 @@ export default function MealDeals() {
             </div>
           </div>
 
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "var(--text)" }}>Browse by category</div>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "var(--text)" }}>Browse by meal time</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 24 }}>
-            {[["🍕","Pizza"],["🍗","Wings"],["🥖","Subs"],["🌮","Tacos"],["🍔","Burgers"],["🥗","Salads"],["🍳","Breakfast"],["🍺","Happy Hour"]].map(([icon,name]) => (
+            {[["🌅","Breakfast"],["☀️","Lunch"],["🌙","Dinner"],["🍺","Happy Hour"]].map(([icon,name]) => (
               <div key={name} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 8px", textAlign: "center", cursor: "pointer" }}
-                onClick={() => { setCatFilter(name === "Happy Hour" ? "American" : name); setScreen("home"); }}>
+                onClick={() => { setMealFilter(name); setScreen("home"); }}>
                 <div style={{ fontSize: 24, marginBottom: 6 }}>{icon}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{name}</div>
               </div>
@@ -481,17 +471,8 @@ export default function MealDeals() {
           </div>
 
           <div style={styles.formCard}>
-            <div style={styles.sectionLabel}>Category & meal time</div>
+            <div style={styles.sectionLabel}>Meal time</div>
             <div style={styles.field}>
-              <label style={styles.label}>Category</label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {["Pizza","Wings","Subs","Burgers","Tacos","Mediterranean","American","Breakfast","Other"].map(c => (
-                  <button key={c} style={postForm.category === c ? styles.chipActive : styles.chip} onClick={() => setPostForm(p => ({ ...p, category: c }))}>{c}</button>
-                ))}
-              </div>
-            </div>
-            <div style={styles.field}>
-              <label style={styles.label}>Meal time</label>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {["Breakfast","Lunch","Dinner","Happy Hour","Late Night"].map(m => (
                   <button key={m} style={postForm.mealTime === m ? styles.chipActive : styles.chip} onClick={() => setPostForm(p => ({ ...p, mealTime: m }))}>{m}</button>
