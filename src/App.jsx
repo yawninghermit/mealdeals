@@ -13,6 +13,8 @@ const mapDeal = (d) => ({
   comments: (d.comments || []).map(c => ({ ...c, user: c.username, votes: 0 })),
 });
 
+const username = (user) => user?.email?.split("@")[0] ?? "anonymous";
+
 const CATEGORIES = ["All", "Pizza", "Wings", "Subs", "Burgers", "Tacos", "Mediterranean", "American", "Breakfast"];
 const MEAL_TIMES = ["All", "Breakfast", "Lunch", "Dinner", "Happy Hour"];
 const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
@@ -22,6 +24,8 @@ export default function MealDeals() {
   const [selectedDeal, setSelectedDeal] = useState(null);
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [authModal, setAuthModal] = useState(null); // "login" | "signup" | null
   const [votedDeals, setVotedDeals] = useState(() => {
     try { return JSON.parse(localStorage.getItem("votedDeals") || "{}"); }
     catch { return {}; }
@@ -37,7 +41,14 @@ export default function MealDeals() {
   });
   const [postSuccess, setPostSuccess] = useState(false);
 
-  useEffect(() => { fetchDeals(); }, []);
+  useEffect(() => {
+    fetchDeals();
+    supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const fetchDeals = async () => {
     setLoading(true);
@@ -70,12 +81,13 @@ export default function MealDeals() {
   };
 
   const handleComment = async (dealId) => {
+    if (!user) { setAuthModal("login"); return; }
     if (!newComment.trim()) return;
     const text = newComment.trim();
     setNewComment("");
     const { data, error } = await supabase
       .from("comments")
-      .insert({ deal_id: dealId, username: "you", text })
+      .insert({ deal_id: dealId, username: username(user), text, user_id: user.id })
       .select()
       .single();
     if (!error && data) {
@@ -86,6 +98,7 @@ export default function MealDeals() {
   };
 
   const handlePostDeal = async () => {
+    if (!user) { setAuthModal("login"); return; }
     if (!postForm.title || !postForm.restaurant || !postForm.price) return;
     const { data, error } = await supabase
       .from("deals")
@@ -103,12 +116,14 @@ export default function MealDeals() {
         hours: "See description",
         verified: false,
         normal_price: null,
+        user_id: user.id,
       })
       .select("*, comments(*)")
       .single();
     if (!error && data) {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
+      setPostForm({ title: "", restaurant: "", price: "", description: "", category: "Pizza", mealTime: "Lunch", days: [], includes: [] });
       setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
     }
   };
@@ -218,12 +233,25 @@ export default function MealDeals() {
     <div style={styles.root}>
       <style>{css}</style>
 
+      {authModal && <AuthModal mode={authModal} onClose={() => setAuthModal(null)} onSwitch={m => setAuthModal(m)} />}
+
       {/* Nav */}
       <div style={styles.nav}>
         <div style={styles.logo} onClick={() => setScreen("home")}>MealDeals</div>
         <div style={styles.navRight}>
           <button style={screen === "explore" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("explore")}>Explore</button>
-          <button style={styles.navBtnActive} onClick={() => setScreen("post")}>+ Post a deal</button>
+          {user ? (
+            <>
+              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>u/{username(user)}</span>
+              <button style={styles.navBtn} onClick={() => supabase.auth.signOut()}>Log out</button>
+            </>
+          ) : (
+            <>
+              <button style={styles.navBtn} onClick={() => setAuthModal("login")}>Log in</button>
+              <button style={styles.navBtn} onClick={() => setAuthModal("signup")}>Sign up</button>
+            </>
+          )}
+          <button style={styles.navBtnActive} onClick={() => user ? setScreen("post") : setAuthModal("login")}>+ Post a deal</button>
         </div>
       </div>
 
@@ -255,17 +283,13 @@ export default function MealDeals() {
             <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-faint)" }}>{filteredDeals.length} deals</span>
           </div>
 
-          {loading && (
-            <div style={styles.emptyState}>
-              <div style={{ fontSize: 13 }}>Loading deals...</div>
-            </div>
-          )}
+          {loading && <div style={styles.emptyState}><div style={{ fontSize: 13 }}>Loading deals...</div></div>}
 
           {!loading && filteredDeals.length === 0 && (
             <div style={styles.emptyState}>
               <div style={{ fontSize: 32, marginBottom: 10 }}>🍽️</div>
-              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No deals found</div>
-              <div style={{ fontSize: 13 }}>Try a different filter or <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => setScreen("post")}>post one!</span></div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No deals yet</div>
+              <div style={{ fontSize: 13 }}>Be the first to <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => user ? setScreen("post") : setAuthModal("login")}>post one!</span></div>
             </div>
           )}
 
@@ -297,18 +321,17 @@ export default function MealDeals() {
 
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "var(--text)" }}>Browse by category</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 24 }}>
-            {[["🍕","Pizza","24"],["🍗","Wings","18"],["🥖","Subs","11"],["🌮","Tacos","9"],["🍔","Burgers","15"],["🥗","Salads","7"],["🍳","Breakfast","13"],["🍺","Happy Hour","20"]].map(([icon,name,count]) => (
+            {[["🍕","Pizza"],["🍗","Wings"],["🥖","Subs"],["🌮","Tacos"],["🍔","Burgers"],["🥗","Salads"],["🍳","Breakfast"],["🍺","Happy Hour"]].map(([icon,name]) => (
               <div key={name} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 8px", textAlign: "center", cursor: "pointer" }}
                 onClick={() => { setCatFilter(name === "Happy Hour" ? "American" : name); setScreen("home"); }}>
                 <div style={{ fontSize: 24, marginBottom: 6 }}>{icon}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>{name}</div>
-                <div style={{ fontSize: 11, color: "var(--text-faint)" }}>{count} deals</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{name}</div>
               </div>
             ))}
           </div>
 
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: "var(--text)" }}>Top deals near you</div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>Within 2 miles · Updated today</div>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: "var(--text)" }}>Top deals</div>
+          <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>Sorted by votes</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {deals.slice(0,4).map(d => (
               <div key={d.id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, cursor: "pointer" }}
@@ -390,11 +413,17 @@ export default function MealDeals() {
               {openDeal.comments.length === 0 && (
                 <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 12 }}>No comments yet — be the first!</div>
               )}
-              <div style={styles.inputRow}>
-                <input style={styles.input} placeholder="Share your experience — portion size, tips, what's included..." value={newComment} onChange={e => setNewComment(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleComment(openDeal.id)} />
-                <button style={styles.btnPrimary} onClick={() => handleComment(openDeal.id)}>Post</button>
-              </div>
+              {user ? (
+                <div style={styles.inputRow}>
+                  <input style={styles.input} placeholder="Share your experience..." value={newComment} onChange={e => setNewComment(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleComment(openDeal.id)} />
+                  <button style={styles.btnPrimary} onClick={() => handleComment(openDeal.id)}>Post</button>
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>
+                  <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => setAuthModal("login")}>Log in</span> to leave a comment.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -489,6 +518,59 @@ export default function MealDeals() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function AuthModal({ mode, onClose, onSwitch }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    setError("");
+    setLoading(true);
+    if (mode === "signup") {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) setError(error.message);
+      else onClose();
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setError(error.message);
+      else onClose();
+    }
+    setLoading(false);
+  };
+
+  const overlayStyle = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 };
+  const modalStyle = { background: "var(--surface)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.15)" };
+  const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 10 };
+  const btnStyle = { width: "100%", padding: "11px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 };
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={modalStyle} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
+          {mode === "signup" ? "Create an account" : "Welcome back"}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>
+          {mode === "signup" ? "Sign up to post deals and leave comments." : "Log in to your account."}
+        </div>
+        <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+        <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleSubmit()} />
+        {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
+        <button style={btnStyle} onClick={handleSubmit} disabled={loading}>
+          {loading ? "..." : mode === "signup" ? "Sign up" : "Log in"}
+        </button>
+        <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", marginTop: 14 }}>
+          {mode === "signup" ? "Already have an account? " : "No account? "}
+          <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => onSwitch(mode === "signup" ? "login" : "signup")}>
+            {mode === "signup" ? "Log in" : "Sign up"}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
