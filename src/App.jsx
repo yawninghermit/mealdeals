@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import MapView from "./MapView";
 
 const supabase = createClient(
   "https://scohfrcegjmqyboayptu.supabase.co",
@@ -34,9 +35,10 @@ export default function MealDeals() {
   const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
   const [postForm, setPostForm] = useState({
-    title: "", restaurant: "", price: "", description: "",
+    title: "", restaurant: "", address: "", price: "", description: "",
     mealTime: "Lunch", days: [], includes: []
   });
+  const [geocoding, setGeocoding] = useState(false);
   const [postSuccess, setPostSuccess] = useState(false);
 
   useEffect(() => {
@@ -95,9 +97,28 @@ export default function MealDeals() {
     }
   };
 
+  const geocodeAddress = async (address) => {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+      { headers: { "Accept-Language": "en" } }
+    );
+    const data = await res.json();
+    if (data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    return null;
+  };
+
   const handlePostDeal = async () => {
     if (!user) { setAuthModal("login"); return; }
     if (!postForm.title || !postForm.restaurant || !postForm.price) return;
+
+    let lat = null, lng = null;
+    if (postForm.address.trim()) {
+      setGeocoding(true);
+      const coords = await geocodeAddress(postForm.address.trim());
+      setGeocoding(false);
+      if (coords) { lat = coords.lat; lng = coords.lng; }
+    }
+
     const { data, error } = await supabase
       .from("deals")
       .insert({
@@ -114,13 +135,16 @@ export default function MealDeals() {
         verified: false,
         normal_price: null,
         user_id: user.id,
+        address: postForm.address.trim() || null,
+        lat,
+        lng,
       })
       .select("*, comments(*)")
       .single();
     if (!error && data) {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
-      setPostForm({ title: "", restaurant: "", price: "", description: "", mealTime: "Lunch", days: [], includes: [] });
+      setPostForm({ title: "", restaurant: "", address: "", price: "", description: "", mealTime: "Lunch", days: [], includes: [] });
       setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
     }
   };
@@ -236,6 +260,7 @@ export default function MealDeals() {
         <div style={styles.logo} onClick={() => setScreen("home")}>MealDeals</div>
         <div style={styles.navRight}>
           <button style={screen === "explore" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("explore")}>Explore</button>
+          <button style={screen === "map" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("map")}>Map</button>
           {user ? (
             <>
               <span style={{ fontSize: 13, color: "var(--text-muted)" }}>u/{username(user)}</span>
@@ -335,6 +360,14 @@ export default function MealDeals() {
         </div>
       )}
 
+      {/* MAP */}
+      {screen === "map" && (
+        <MapView
+          deals={deals}
+          onDealClick={(id) => { setSelectedDeal(id); setScreen("deal"); }}
+        />
+      )}
+
       {/* DEAL DETAIL */}
       {screen === "deal" && openDeal && (
         <div style={styles.page}>
@@ -427,6 +460,10 @@ export default function MealDeals() {
               <label style={styles.label}>Restaurant name *</label>
               <input style={styles.textInput} placeholder="e.g. McLanahan's, Rathskeller..." value={postForm.restaurant} onChange={e => setPostForm(p => ({ ...p, restaurant: e.target.value }))} />
             </div>
+            <div style={styles.field}>
+              <label style={styles.label}>Address <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>(optional — shows on map)</span></label>
+              <input style={styles.textInput} placeholder="e.g. 123 College Ave, State College, PA" value={postForm.address} onChange={e => setPostForm(p => ({ ...p, address: e.target.value }))} />
+            </div>
           </div>
 
           <div style={styles.formCard}>
@@ -488,7 +525,9 @@ export default function MealDeals() {
 
           <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
             <button style={{ ...styles.btn, padding: "12px 20px", fontSize: 14 }} onClick={() => setScreen("home")}>Cancel</button>
-            <button style={{ ...styles.btnPrimary, flex: 1, fontSize: 15 }} onClick={handlePostDeal}>Post deal →</button>
+            <button style={{ ...styles.btnPrimary, flex: 1, fontSize: 15 }} onClick={handlePostDeal} disabled={geocoding}>
+              {geocoding ? "Finding location..." : "Post deal →"}
+            </button>
           </div>
         </div>
       )}
