@@ -581,7 +581,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
   }, [mode]);
 
   const handleSubmit = async () => {
-    if (!captchaToken) { setError("Please complete the CAPTCHA."); return; }
+    if (mode === "signup" && !captchaToken) { setError("Please complete the CAPTCHA."); return; }
     setError("");
     setLoading(true);
     if (mode === "signup") {
@@ -589,7 +589,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
       if (error) setError(error.message);
       else onClose();
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setError(error.message);
       else onClose();
     }
