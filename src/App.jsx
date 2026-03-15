@@ -686,12 +686,44 @@ function ForgotPasswordModal({ onClose, onSwitch }) {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const turnstileRef = useRef(null);
+  const widgetIdRef = useRef(null);
+
+  useEffect(() => {
+    const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+    if (!siteKey) return;
+    const render = () => {
+      if (turnstileRef.current && window.turnstile && !widgetIdRef.current) {
+        try {
+          widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+            sitekey: siteKey,
+            callback: (token) => setCaptchaToken(token),
+            "expired-callback": () => setCaptchaToken(null),
+          });
+        } catch (e) { console.error("Turnstile render failed:", e); }
+      }
+    };
+    if (window.turnstile) { render(); }
+    else {
+      const interval = setInterval(() => { if (window.turnstile) { clearInterval(interval); render(); } }, 100);
+      return () => clearInterval(interval);
+    }
+    return () => {
+      if (widgetIdRef.current != null && window.turnstile) {
+        window.turnstile.remove(widgetIdRef.current);
+        widgetIdRef.current = null;
+      }
+    };
+  }, []);
 
   const handleSubmit = async () => {
+    if (!captchaToken) { setError("Please complete the CAPTCHA."); return; }
     setError("");
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin,
+      captchaToken,
     });
     if (error) setError(error.message);
     else setSent(true);
@@ -701,7 +733,7 @@ function ForgotPasswordModal({ onClose, onSwitch }) {
   const overlayStyle = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 };
   const modalStyle = { background: "var(--surface)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.15)" };
   const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 10 };
-  const btnStyle = { width: "100%", padding: "11px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 };
+  const btnStyle = { width: "100%", padding: "11px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4, opacity: (!captchaToken || loading) ? 0.5 : 1 };
 
   return (
     <div style={overlayStyle} onClick={onClose}>
@@ -718,9 +750,10 @@ function ForgotPasswordModal({ onClose, onSwitch }) {
           <>
             <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>Enter your email and we'll send you a reset link.</div>
             <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleSubmit()} />
+              onKeyDown={e => e.key === "Enter" && captchaToken && handleSubmit()} />
+            <div ref={turnstileRef} style={{ marginBottom: 10 }} />
             {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
-            <button style={btnStyle} onClick={handleSubmit} disabled={loading}>{loading ? "..." : "Send reset link"}</button>
+            <button style={btnStyle} onClick={handleSubmit} disabled={loading || !captchaToken}>{loading ? "..." : "Send reset link"}</button>
             <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", marginTop: 14 }}>
               <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => onSwitch("login")}>Back to log in</span>
             </div>
