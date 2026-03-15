@@ -549,7 +549,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
     const render = () => {
       if (turnstileRef.current && window.turnstile && !widgetIdRef.current) {
         widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-          sitekey: "0x4AAAAAACrAH9AMXRG3yLnj",
+          sitekey: import.meta.env.VITE_TURNSTILE_SITE_KEY,
           callback: (token) => setCaptchaToken(token),
           "expired-callback": () => setCaptchaToken(null),
         });
