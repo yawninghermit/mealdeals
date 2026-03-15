@@ -118,6 +118,15 @@ export default function MealDeals() {
     }
   };
 
+  const handleDeleteComment = async (dealId, commentId) => {
+    const { error } = await supabase.from("comments").delete().eq("id", commentId);
+    if (!error) {
+      setDeals(prev => prev.map(d =>
+        d.id === dealId ? { ...d, comments: d.comments.filter(c => c.id !== commentId) } : d
+      ));
+    }
+  };
+
   const geocodeAddress = async (address) => {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
@@ -452,7 +461,13 @@ export default function MealDeals() {
               </div>
               {openDeal.comments.map(c => (
                 <div key={c.id} style={{ ...styles.commentBox, marginBottom: 8 }}>
-                  <div style={styles.commentUser}>u/{c.user}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                    <div style={styles.commentUser}>u/{c.user}</div>
+                    {(role === "moderator" || c.user_id === user?.id) && (
+                      <span onClick={() => handleDeleteComment(openDeal.id, c.id)}
+                        style={{ fontSize: 11, color: "#e24b4a", cursor: "pointer" }}>Delete</span>
+                    )}
+                  </div>
                   <div style={styles.commentText}>{c.text}</div>
                 </div>
               ))}
