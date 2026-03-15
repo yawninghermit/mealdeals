@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import MapView from "./MapView";
 
@@ -540,12 +540,56 @@ function AuthModal({ mode, onClose, onSwitch }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const turnstileRef = useRef(null);
+  const widgetIdRef = useRef(null);
+
+  useEffect(() => {
+    if (mode !== "signup") return;
+    const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+    if (!siteKey) return;
+
+    const renderWidget = () => {
+      if (window.turnstile && turnstileRef.current && widgetIdRef.current === null) {
+        widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+          sitekey: siteKey,
+          callback: (token) => setCaptchaToken(token),
+          "expired-callback": () => setCaptchaToken(""),
+        });
+      }
+    };
+
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      const script = document.querySelector(
+        'script[src*="challenges.cloudflare.com/turnstile"]'
+      );
+      if (script) script.addEventListener("load", renderWidget);
+    }
+
+    return () => {
+      if (widgetIdRef.current !== null && window.turnstile) {
+        window.turnstile.remove(widgetIdRef.current);
+        widgetIdRef.current = null;
+      }
+    };
+  }, [mode]);
 
   const handleSubmit = async () => {
     setError("");
     setLoading(true);
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password });
+      if (import.meta.env.VITE_TURNSTILE_SITE_KEY && !captchaToken) {
+        setError("Please complete the captcha verification.");
+        setLoading(false);
+        return;
+      }
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: captchaToken ? { captchaToken } : undefined,
+      });
       if (error) setError(error.message);
       else onClose();
     } else {
@@ -573,6 +617,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
         <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
         <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleSubmit()} />
+        {mode === "signup" && <div ref={turnstileRef} style={{ marginBottom: 10 }} />}
         {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
         <button style={btnStyle} onClick={handleSubmit} disabled={loading}>
           {loading ? "..." : mode === "signup" ? "Sign up" : "Log in"}
