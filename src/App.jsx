@@ -25,6 +25,7 @@ export default function MealDeals() {
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
   const [authModal, setAuthModal] = useState(null); // "login" | "signup" | null
   const [votedDeals, setVotedDeals] = useState(() => {
     try { return JSON.parse(localStorage.getItem("votedDeals") || "{}"); }
@@ -41,11 +42,21 @@ export default function MealDeals() {
   const [geocoding, setGeocoding] = useState(false);
   const [postSuccess, setPostSuccess] = useState(false);
 
+  const fetchRole = async (userId) => {
+    if (!userId) { setRole(null); return; }
+    const { data } = await supabase.from("profiles").select("role").eq("id", userId).single();
+    setRole(data?.role ?? "user");
+  };
+
   useEffect(() => {
     fetchDeals();
-    supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      fetchRole(session?.user?.id ?? null);
+    });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      fetchRole(session?.user?.id ?? null);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -79,6 +90,15 @@ export default function MealDeals() {
     localStorage.setItem("votedDeals", JSON.stringify(newVoted));
 
     await supabase.rpc("increment_votes", { deal_id: dealId, delta: totalDelta });
+  };
+
+  const handleDeleteDeal = async (dealId) => {
+    if (!window.confirm("Delete this deal?")) return;
+    const { error } = await supabase.from("deals").delete().eq("id", dealId);
+    if (!error) {
+      setDeals(prev => prev.filter(d => d.id !== dealId));
+      if (selectedDeal === dealId) setScreen("home");
+    }
   };
 
   const handleComment = async (dealId) => {
@@ -265,6 +285,7 @@ export default function MealDeals() {
           {user ? (
             <>
               <span style={{ fontSize: 13, color: "var(--text-muted)" }}>u/{username(user)}</span>
+              {role === "moderator" && <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "var(--accent)", borderRadius: 20, padding: "2px 8px" }}>MOD</span>}
               <button style={styles.navBtn} onClick={() => supabase.auth.signOut()}>Log out</button>
             </>
           ) : (
@@ -304,7 +325,9 @@ export default function MealDeals() {
 
           {!loading && filteredDeals.map(deal => (
             <DealCard key={deal.id} deal={deal} styles={styles} votedDeals={votedDeals}
-              onVote={handleVote} onClick={() => { setSelectedDeal(deal.id); setScreen("deal"); }} />
+              onVote={handleVote} onClick={() => { setSelectedDeal(deal.id); setScreen("deal"); }}
+              canDelete={role === "moderator" || deal.user_id === user?.id}
+              onDelete={handleDeleteDeal} />
           ))}
         </div>
       )}
@@ -372,7 +395,13 @@ export default function MealDeals() {
       {/* DEAL DETAIL */}
       {screen === "deal" && openDeal && (
         <div style={styles.page}>
-          <button style={styles.backBtn} onClick={() => setScreen("home")}>← Back to deals</button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <button style={styles.backBtn} onClick={() => setScreen("home")}>← Back to deals</button>
+            {(role === "moderator" || openDeal?.user_id === user?.id) && (
+              <button style={{ ...styles.btn, color: "#e24b4a", borderColor: "#e24b4a", fontSize: 13 }}
+                onClick={() => handleDeleteDeal(openDeal.id)}>Delete deal</button>
+            )}
+          </div>
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 20 }}>
             <div style={styles.cardHeader}>
               <div style={styles.voteCol}>
@@ -628,7 +657,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
   );
 }
 
-function DealCard({ deal, styles, votedDeals, onVote, onClick }) {
+function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDelete }) {
   const [showComments, setShowComments] = useState(false);
   return (
     <div style={styles.card} onClick={onClick}>
@@ -642,6 +671,10 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick }) {
           <div style={styles.titleRow}>
             <span style={styles.dealTitle}>{deal.title}</span>
             <span style={styles.priceBadge}>{deal.price}</span>
+            {canDelete && (
+              <span onClick={e => { e.stopPropagation(); onDelete(deal.id); }}
+                style={{ marginLeft: "auto", fontSize: 12, color: "#e24b4a", cursor: "pointer", flexShrink: 0 }}>Delete</span>
+            )}
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
             <span style={styles.badge}>{deal.mealTime}</span>
