@@ -540,36 +540,29 @@ function AuthModal({ mode, onClose, onSwitch }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaToken, setCaptchaToken] = useState(null);
   const turnstileRef = useRef(null);
   const widgetIdRef = useRef(null);
 
   useEffect(() => {
     if (mode !== "signup") return;
-    const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-    if (!siteKey) return;
-
-    const renderWidget = () => {
-      if (window.turnstile && turnstileRef.current && widgetIdRef.current === null) {
+    const render = () => {
+      if (turnstileRef.current && window.turnstile && !widgetIdRef.current) {
         widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-          sitekey: siteKey,
+          sitekey: import.meta.env.VITE_TURNSTILE_SITE_KEY,
           callback: (token) => setCaptchaToken(token),
-          "expired-callback": () => setCaptchaToken(""),
+          "expired-callback": () => setCaptchaToken(null),
         });
       }
     };
-
     if (window.turnstile) {
-      renderWidget();
+      render();
     } else {
-      const script = document.querySelector(
-        'script[src*="challenges.cloudflare.com/turnstile"]'
-      );
-      if (script) script.addEventListener("load", renderWidget);
+      const interval = setInterval(() => { if (window.turnstile) { clearInterval(interval); render(); } }, 100);
+      return () => clearInterval(interval);
     }
-
     return () => {
-      if (widgetIdRef.current !== null && window.turnstile) {
+      if (widgetIdRef.current != null && window.turnstile) {
         window.turnstile.remove(widgetIdRef.current);
         widgetIdRef.current = null;
       }
@@ -580,16 +573,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
     setError("");
     setLoading(true);
     if (mode === "signup") {
-      if (import.meta.env.VITE_TURNSTILE_SITE_KEY && !captchaToken) {
-        setError("Please complete the captcha verification.");
-        setLoading(false);
-        return;
-      }
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: captchaToken ? { captchaToken } : undefined,
-      });
+      const { error } = await supabase.auth.signUp({ email, password, options: { captchaToken } });
       if (error) setError(error.message);
       else onClose();
     } else {
@@ -619,7 +603,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
           onKeyDown={e => e.key === "Enter" && handleSubmit()} />
         {mode === "signup" && <div ref={turnstileRef} style={{ marginBottom: 10 }} />}
         {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
-        <button style={btnStyle} onClick={handleSubmit} disabled={loading}>
+        <button style={btnStyle} onClick={handleSubmit} disabled={loading || (mode === "signup" && !captchaToken)}>
           {loading ? "..." : mode === "signup" ? "Sign up" : "Log in"}
         </button>
         <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", marginTop: 14 }}>
