@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import MapView from "./MapView";
 
@@ -540,12 +540,40 @@ function AuthModal({ mode, onClose, onSwitch }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const turnstileRef = useRef(null);
+  const widgetIdRef = useRef(null);
+
+  useEffect(() => {
+    if (mode !== "signup") return;
+    const render = () => {
+      if (turnstileRef.current && window.turnstile && !widgetIdRef.current) {
+        widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+          sitekey: "0x4AAAAAACrAH9AMXRG3yLnj",
+          callback: (token) => setCaptchaToken(token),
+          "expired-callback": () => setCaptchaToken(null),
+        });
+      }
+    };
+    if (window.turnstile) {
+      render();
+    } else {
+      const interval = setInterval(() => { if (window.turnstile) { clearInterval(interval); render(); } }, 100);
+      return () => clearInterval(interval);
+    }
+    return () => {
+      if (widgetIdRef.current != null && window.turnstile) {
+        window.turnstile.remove(widgetIdRef.current);
+        widgetIdRef.current = null;
+      }
+    };
+  }, [mode]);
 
   const handleSubmit = async () => {
     setError("");
     setLoading(true);
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({ email, password, options: { captchaToken } });
       if (error) setError(error.message);
       else onClose();
     } else {
@@ -573,8 +601,9 @@ function AuthModal({ mode, onClose, onSwitch }) {
         <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
         <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleSubmit()} />
+        {mode === "signup" && <div ref={turnstileRef} style={{ marginBottom: 10 }} />}
         {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
-        <button style={btnStyle} onClick={handleSubmit} disabled={loading}>
+        <button style={btnStyle} onClick={handleSubmit} disabled={loading || (mode === "signup" && !captchaToken)}>
           {loading ? "..." : mode === "signup" ? "Sign up" : "Log in"}
         </button>
         <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", marginTop: 14 }}>
