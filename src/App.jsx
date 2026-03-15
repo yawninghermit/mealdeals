@@ -550,7 +550,6 @@ function AuthModal({ mode, onClose, onSwitch }) {
   const widgetIdRef = useRef(null);
 
   useEffect(() => {
-    if (mode !== "signup") return;
     const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
     if (!siteKey) return;
     const render = () => {
@@ -578,10 +577,10 @@ function AuthModal({ mode, onClose, onSwitch }) {
         widgetIdRef.current = null;
       }
     };
-  }, [mode]);
+  }, []);
 
   const handleSubmit = async () => {
-    if (mode === "signup" && !captchaToken) { setError("Please complete the CAPTCHA."); return; }
+    if (!captchaToken) { setError("Please complete the CAPTCHA."); return; }
     setError("");
     setLoading(true);
     if (mode === "signup") {
@@ -589,7 +588,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
       if (error) setError(error.message);
       else onClose();
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
       if (error) setError(error.message);
       else onClose();
     }
@@ -612,10 +611,10 @@ function AuthModal({ mode, onClose, onSwitch }) {
         </div>
         <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
         <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && (mode !== "signup" || captchaToken) && handleSubmit()} />
-        {mode === "signup" && <div ref={turnstileRef} style={{ marginBottom: 10 }} />}
+          onKeyDown={e => e.key === "Enter" && captchaToken && handleSubmit()} />
+        <div ref={turnstileRef} style={{ marginBottom: 10 }} />
         {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
-        <button style={btnStyle} onClick={handleSubmit} disabled={loading || (mode === "signup" && !captchaToken)}>
+        <button style={btnStyle} onClick={handleSubmit} disabled={loading || !captchaToken}>
           {loading ? "..." : mode === "signup" ? "Sign up" : "Log in"}
         </button>
         <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", marginTop: 14 }}>
