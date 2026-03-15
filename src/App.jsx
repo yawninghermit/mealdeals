@@ -26,7 +26,8 @@ export default function MealDeals() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
-  const [authModal, setAuthModal] = useState(null); // "login" | "signup" | null
+  const [authModal, setAuthModal] = useState(null); // "login" | "signup" | "forgot" | null
+  const [resetPassword, setResetPassword] = useState(false);
   const [votedDeals, setVotedDeals] = useState(() => {
     try { return JSON.parse(localStorage.getItem("votedDeals") || "{}"); }
     catch { return {}; }
@@ -54,9 +55,10 @@ export default function MealDeals() {
       setUser(session?.user ?? null);
       fetchRole(session?.user?.id ?? null);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       fetchRole(session?.user?.id ?? null);
+      if (event === "PASSWORD_RECOVERY") setResetPassword(true);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -283,7 +285,9 @@ export default function MealDeals() {
     <div style={styles.root}>
       <style>{css}</style>
 
-      {authModal && <AuthModal mode={authModal} onClose={() => setAuthModal(null)} onSwitch={m => setAuthModal(m)} />}
+      {authModal && authModal !== "forgot" && <AuthModal mode={authModal} onClose={() => setAuthModal(null)} onSwitch={m => setAuthModal(m)} />}
+      {authModal === "forgot" && <ForgotPasswordModal onClose={() => setAuthModal(null)} onSwitch={m => setAuthModal(m)} />}
+      {resetPassword && <ResetPasswordModal onClose={() => setResetPassword(false)} />}
 
       {/* Nav */}
       <div style={styles.nav}>
@@ -667,6 +671,104 @@ function AuthModal({ mode, onClose, onSwitch }) {
             {mode === "signup" ? "Log in" : "Sign up"}
           </span>
         </div>
+        {mode === "login" && (
+          <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", marginTop: 8 }}>
+            <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => onSwitch("forgot")}>Forgot password?</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ForgotPasswordModal({ onClose, onSwitch }) {
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    setError("");
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+    if (error) setError(error.message);
+    else setSent(true);
+    setLoading(false);
+  };
+
+  const overlayStyle = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 };
+  const modalStyle = { background: "var(--surface)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.15)" };
+  const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 10 };
+  const btnStyle = { width: "100%", padding: "11px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 };
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={modalStyle} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Reset password</div>
+        {sent ? (
+          <>
+            <div style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 20 }}>
+              Check your email for a reset link. It may take a minute to arrive.
+            </div>
+            <button style={btnStyle} onClick={onClose}>Done</button>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>Enter your email and we'll send you a reset link.</div>
+            <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()} />
+            {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
+            <button style={btnStyle} onClick={handleSubmit} disabled={loading}>{loading ? "..." : "Send reset link"}</button>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", marginTop: 14 }}>
+              <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => onSwitch("login")}>Back to log in</span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordModal({ onClose }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const handleSubmit = async () => {
+    setError("");
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) setError(error.message);
+    else setDone(true);
+    setLoading(false);
+  };
+
+  const overlayStyle = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 };
+  const modalStyle = { background: "var(--surface)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.15)" };
+  const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 10 };
+  const btnStyle = { width: "100%", padding: "11px", borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={modalStyle}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Set new password</div>
+        {done ? (
+          <>
+            <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 20 }}>Password updated successfully.</div>
+            <button style={btnStyle} onClick={onClose}>Done</button>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>Enter your new password below.</div>
+            <input style={inputStyle} type="password" placeholder="New password" value={password} onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()} />
+            {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
+            <button style={btnStyle} onClick={handleSubmit} disabled={loading}>{loading ? "..." : "Update password"}</button>
+          </>
+        )}
       </div>
     </div>
   );
