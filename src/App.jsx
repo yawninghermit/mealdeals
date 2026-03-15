@@ -551,13 +551,19 @@ function AuthModal({ mode, onClose, onSwitch }) {
 
   useEffect(() => {
     if (mode !== "signup") return;
+    const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+    if (!siteKey) return;
     const render = () => {
       if (turnstileRef.current && window.turnstile && !widgetIdRef.current) {
-        widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-          sitekey: import.meta.env.VITE_TURNSTILE_SITE_KEY,
-          callback: (token) => setCaptchaToken(token),
-          "expired-callback": () => setCaptchaToken(null),
-        });
+        try {
+          widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+            sitekey: siteKey,
+            callback: (token) => setCaptchaToken(token),
+            "expired-callback": () => setCaptchaToken(null),
+          });
+        } catch (e) {
+          console.error("Turnstile render failed:", e);
+        }
       }
     };
     if (window.turnstile) {
@@ -606,7 +612,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
         </div>
         <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
         <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleSubmit()} />
+          onKeyDown={e => e.key === "Enter" && (mode !== "signup" || captchaToken) && handleSubmit()} />
         {mode === "signup" && <div ref={turnstileRef} style={{ marginBottom: 10 }} />}
         {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
         <button style={btnStyle} onClick={handleSubmit} disabled={loading || (mode === "signup" && !captchaToken)}>
