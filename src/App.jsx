@@ -61,6 +61,7 @@ export default function MealDeals() {
   };
 
   const handleVote = async (dealId, dir) => {
+    if (!user) { setAuthModal("login"); return; }
     const key = `${dealId}-${dir}`;
     const opposite = `${dealId}-${dir === "up" ? "down" : "up"}`;
     const wasVoted = votedDeals[key];
@@ -535,6 +536,10 @@ export default function MealDeals() {
   );
 }
 
+// Replace with your Cloudflare Turnstile site key from https://dash.cloudflare.com/
+// Also enable CAPTCHA in your Supabase dashboard under Authentication > Settings
+const TURNSTILE_SITE_KEY = "YOUR_TURNSTILE_SITE_KEY";
+
 function AuthModal({ mode, onClose, onSwitch }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -570,6 +575,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
   }, [mode]);
 
   const handleSubmit = async () => {
+    if (!captchaToken) { setError("Please complete the CAPTCHA."); return; }
     setError("");
     setLoading(true);
     if (mode === "signup") {
@@ -577,7 +583,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
       if (error) setError(error.message);
       else onClose();
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
       if (error) setError(error.message);
       else onClose();
     }
