@@ -627,17 +627,24 @@ function AuthModal({ mode, onClose, onSwitch }) {
     };
   }, []);
 
+  const resetCaptcha = () => {
+    if (widgetIdRef.current != null && window.turnstile) {
+      window.turnstile.reset(widgetIdRef.current);
+    }
+    setCaptchaToken(null);
+  };
+
   const handleSubmit = async () => {
     if (!captchaToken) { setError("Please complete the CAPTCHA."); return; }
     setError("");
     setLoading(true);
     if (mode === "signup") {
       const { error } = await supabase.auth.signUp({ email, password, options: { captchaToken } });
-      if (error) setError(error.message);
+      if (error) { setError(error.message); resetCaptcha(); }
       else onClose();
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
-      if (error) setError(error.message);
+      if (error) { setError(error.message); resetCaptcha(); }
       else onClose();
     }
     setLoading(false);
@@ -717,6 +724,13 @@ function ForgotPasswordModal({ onClose, onSwitch }) {
     };
   }, []);
 
+  const resetCaptcha = () => {
+    if (widgetIdRef.current != null && window.turnstile) {
+      window.turnstile.reset(widgetIdRef.current);
+    }
+    setCaptchaToken(null);
+  };
+
   const handleSubmit = async () => {
     if (!captchaToken) { setError("Please complete the CAPTCHA."); return; }
     setError("");
@@ -725,7 +739,7 @@ function ForgotPasswordModal({ onClose, onSwitch }) {
       redirectTo: window.location.origin,
       captchaToken,
     });
-    if (error) setError(error.message);
+    if (error) { setError(error.message); resetCaptcha(); }
     else setSent(true);
     setLoading(false);
   };
