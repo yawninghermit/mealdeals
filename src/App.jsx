@@ -3,8 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import MapView from "./MapView";
 
 const supabase = createClient(
-  "https://scohfrcegjmqyboayptu.supabase.co",
-  "sb_publishable_Iddht1KXvcpvnhlYNlkDWA_s2dq3L7K"
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
 const mapDeal = (d) => ({
