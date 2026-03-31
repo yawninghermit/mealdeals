@@ -591,6 +591,7 @@ const TURNSTILE_SITE_KEY = "YOUR_TURNSTILE_SITE_KEY";
 function AuthModal({ mode, onClose, onSwitch }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [captchaToken, setCaptchaToken] = useState(null);
@@ -636,6 +637,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
 
   const handleSubmit = async () => {
     if (!captchaToken) { setError("Please complete the CAPTCHA."); return; }
+    if (mode === "signup" && password !== confirmPassword) { setError("Passwords do not match."); return; }
     setError("");
     setLoading(true);
     if (mode === "signup") {
@@ -666,7 +668,11 @@ function AuthModal({ mode, onClose, onSwitch }) {
         </div>
         <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
         <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && captchaToken && handleSubmit()} />
+          onKeyDown={e => e.key === "Enter" && mode === "login" && captchaToken && handleSubmit()} />
+        {mode === "signup" && (
+          <input style={inputStyle} type="password" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && captchaToken && handleSubmit()} />
+        )}
         <div ref={turnstileRef} style={{ marginBottom: 10 }} />
         {error && <div style={{ fontSize: 13, color: "#e24b4a", marginBottom: 8 }}>{error}</div>}
         <button style={btnStyle} onClick={handleSubmit} disabled={loading || !captchaToken}>
