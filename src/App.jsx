@@ -17,6 +17,23 @@ const mapDeal = (d) => ({
 
 const username = (user) => user?.email?.split("@")[0] ?? "anonymous";
 
+const timeAgo = (ts) => {
+  if (!ts) return "";
+  const s = Math.floor((Date.now() - new Date(ts)) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
+
+const avatarColor = (name = "") => {
+  const colors = ["#e07b54","#5b8dd9","#59a96a","#9b6dcc","#d4a017","#3aa8a8"];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return colors[Math.abs(h) % colors.length];
+};
+
 const MEAL_TIMES = ["All", "Breakfast", "Lunch", "Dinner"];
 const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
@@ -290,9 +307,12 @@ export default function MealDeals() {
     verified: { color: "#1d9e75", fontWeight: 600, fontSize: 11 },
     divider: { borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 },
     commentToggle: { fontSize: 13, color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 },
-    commentBox: { background: "var(--surface-2)", borderRadius: 10, padding: "10px 12px", marginBottom: 8 },
-    commentUser: { fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 3 },
-    commentText: { fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 },
+    commentBox: { display: "flex", gap: 10, marginBottom: 12 },
+    commentAvatar: { width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0, marginTop: 1 },
+    commentBody: { flex: 1, background: "var(--surface-2)", borderRadius: 10, padding: "8px 12px" },
+    commentUser: { fontSize: 12, fontWeight: 700, color: "var(--text)" },
+    commentTime: { fontSize: 11, color: "var(--text-faint)", marginLeft: 6 },
+    commentText: { fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5, marginTop: 3 },
     inputRow: { display: "flex", gap: 8, marginTop: 10 },
     input: { flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 13, fontFamily: "inherit", outline: "none" },
     btn: { padding: "8px 16px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", fontSize: 13, color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit" },
@@ -551,15 +571,23 @@ export default function MealDeals() {
                 💬 {openDeal.comments.length} comment{openDeal.comments.length !== 1 ? "s" : ""}
               </div>
               {openDeal.comments.map(c => (
-                <div key={c.id} style={{ ...styles.commentBox, marginBottom: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                    <div style={styles.commentUser}>u/{c.user}</div>
-                    {(role === "moderator" || c.user_id === user?.id) && (
-                      <span onClick={() => handleDeleteComment(openDeal.id, c.id)}
-                        style={{ fontSize: 11, color: "#e24b4a", cursor: "pointer" }}>Delete</span>
-                    )}
+                <div key={c.id} style={styles.commentBox}>
+                  <div style={{ ...styles.commentAvatar, background: avatarColor(c.user) }}>
+                    {(c.user || "?")[0].toUpperCase()}
                   </div>
-                  <div style={styles.commentText}>{c.text}</div>
+                  <div style={styles.commentBody}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <span style={styles.commentUser}>{c.user}</span>
+                        <span style={styles.commentTime}>{timeAgo(c.created_at)}</span>
+                      </div>
+                      {(role === "moderator" || c.user_id === user?.id) && (
+                        <span onClick={() => handleDeleteComment(openDeal.id, c.id)}
+                          style={{ fontSize: 11, color: "#e24b4a", cursor: "pointer" }}>Delete</span>
+                      )}
+                    </div>
+                    <div style={styles.commentText}>{c.text}</div>
+                  </div>
                 </div>
               ))}
               {openDeal.comments.length === 0 && (
@@ -954,9 +982,17 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
       {showComments && deal.comments.length > 0 && (
         <div style={styles.divider} onClick={e => e.stopPropagation()}>
           {deal.comments.slice(0, 2).map(c => (
-            <div key={c.id} style={{ ...styles.commentBox, marginBottom: 6 }}>
-              <div style={styles.commentUser}>u/{c.user}</div>
-              <div style={styles.commentText}>{c.text}</div>
+            <div key={c.id} style={styles.commentBox}>
+              <div style={{ ...styles.commentAvatar, background: avatarColor(c.user), width: 26, height: 26, fontSize: 11 }}>
+                {(c.user || "?")[0].toUpperCase()}
+              </div>
+              <div style={styles.commentBody}>
+                <div>
+                  <span style={styles.commentUser}>{c.user}</span>
+                  <span style={styles.commentTime}>{timeAgo(c.created_at)}</span>
+                </div>
+                <div style={styles.commentText}>{c.text}</div>
+              </div>
             </div>
           ))}
           {deal.comments.length > 2 && (
