@@ -37,7 +37,7 @@ export default function MealDeals() {
   const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
   const [postForm, setPostForm] = useState({
-    title: "", restaurant: "", address: "", price: "", description: "",
+    title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "",
     mealTime: "Lunch", days: [], includes: []
   });
   const [geocoding, setGeocoding] = useState(false);
@@ -165,7 +165,7 @@ export default function MealDeals() {
         distance: "near you",
         hours: "See description",
         verified: false,
-        normal_price: null,
+        normal_price: postForm.normalPrice.trim() || null,
         user_id: user.id,
         address: postForm.address.trim() || null,
         lat,
@@ -176,7 +176,7 @@ export default function MealDeals() {
     if (!error && data) {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
-      setPostForm({ title: "", restaurant: "", address: "", price: "", description: "", mealTime: "Lunch", days: [], includes: [] });
+      setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTime: "Lunch", days: [], includes: [] });
       setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
     }
   };
@@ -532,7 +532,7 @@ export default function MealDeals() {
               </div>
               <div style={styles.field}>
                 <label style={styles.label}>Normal price</label>
-                <input style={styles.textInput} placeholder="$0.00 (shows savings)" />
+                <input style={styles.textInput} placeholder="$0.00 (shows savings)" value={postForm.normalPrice} onChange={e => setPostForm(p => ({ ...p, normalPrice: e.target.value }))} />
               </div>
             </div>
           </div>
