@@ -34,7 +34,7 @@ export default function MealDeals() {
     catch { return {}; }
   });
   const [mealFilter, setMealFilter] = useState("All");
-  const [dayFilter, setDayFilter] = useState(DAYS_SHORT[new Date().getDay()]);
+  const [dayFilter, setDayFilter] = useState([DAYS_SHORT[new Date().getDay()]]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
@@ -251,7 +251,7 @@ export default function MealDeals() {
 
   const filteredDeals = deals.filter(d => {
     if (mealFilter !== "All" && d.mealTime !== mealFilter) return false;
-    if (dayFilter !== "All" && d.days && d.days.length > 0 && !d.days.includes(dayFilter)) return false;
+    if (dayFilter.length > 0 && d.days && d.days.length > 0 && !d.days.some(day => dayFilter.includes(day))) return false;
     if (searchQuery && !d.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !d.restaurant.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
@@ -387,8 +387,12 @@ export default function MealDeals() {
           <div style={styles.filterBar}>
             {["All", ...DAYS_SHORT].map(d => {
               const isToday = d === DAYS_SHORT[new Date().getDay()];
+              const isActive = d === "All" ? dayFilter.length === 0 : dayFilter.includes(d);
               return (
-                <button key={d} style={dayFilter === d ? styles.chipActive : styles.chip} onClick={() => setDayFilter(d)}>
+                <button key={d} style={isActive ? styles.chipActive : styles.chip} onClick={() => {
+                  if (d === "All") { setDayFilter([]); }
+                  else { setDayFilter(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]); }
+                }}>
                   {d === "All" ? "All days" : d}{isToday && d !== "All" ? " •" : ""}
                 </button>
               );
