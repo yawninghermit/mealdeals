@@ -42,6 +42,7 @@ export default function MealDeals() {
   });
   const [geocoding, setGeocoding] = useState(false);
   const [postSuccess, setPostSuccess] = useState(false);
+  const [editingDealId, setEditingDealId] = useState(null);
 
   const fetchRole = async (userId) => {
     if (!userId) { setRole(null); return; }
@@ -139,6 +140,22 @@ export default function MealDeals() {
     return null;
   };
 
+  const openEditDeal = (deal) => {
+    setPostForm({
+      title: deal.title,
+      restaurant: deal.restaurant,
+      address: deal.address || "",
+      price: deal.price,
+      normalPrice: deal.normalPrice || "",
+      description: deal.description || "",
+      mealTime: deal.mealTime,
+      days: deal.days || [],
+      includes: deal.includes || [],
+    });
+    setEditingDealId(deal.id);
+    setScreen("post");
+  };
+
   const handlePostDeal = async () => {
     if (!user) { setAuthModal("login"); return; }
     if (!postForm.title || !postForm.restaurant || !postForm.price) return;
@@ -149,6 +166,35 @@ export default function MealDeals() {
       const coords = await geocodeAddress(postForm.address.trim());
       setGeocoding(false);
       if (coords) { lat = coords.lat; lng = coords.lng; }
+    }
+
+    if (editingDealId) {
+      const { data, error } = await supabase
+        .from("deals")
+        .update({
+          title: postForm.title,
+          restaurant: postForm.restaurant,
+          price: postForm.price,
+          description: postForm.description,
+          meal_time: postForm.mealTime,
+          days: postForm.days,
+          includes: postForm.includes,
+          normal_price: postForm.normalPrice.trim() || null,
+          address: postForm.address.trim() || null,
+          lat,
+          lng,
+        })
+        .eq("id", editingDealId)
+        .select("*, comments(*)")
+        .single();
+      if (!error && data) {
+        setDeals(prev => prev.map(d => d.id === editingDealId ? mapDeal(data) : d));
+        setEditingDealId(null);
+        setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTime: "Lunch", days: [], includes: [] });
+        setPostSuccess(true);
+        setTimeout(() => { setPostSuccess(false); setScreen("deal"); }, 1800);
+      }
+      return;
     }
 
     const { data, error } = await supabase
@@ -410,10 +456,15 @@ export default function MealDeals() {
         <div style={styles.page}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <button style={styles.backBtn} onClick={() => setScreen("home")}>← Back to deals</button>
-            {(role === "moderator" || openDeal?.user_id === user?.id) && (
-              <button style={{ ...styles.btn, color: "#e24b4a", borderColor: "#e24b4a", fontSize: 13 }}
-                onClick={() => handleDeleteDeal(openDeal.id)}>Delete deal</button>
-            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              {(role === "moderator" || openDeal?.user_id === user?.id) && (
+                <button style={{ ...styles.btn, fontSize: 13 }} onClick={() => openEditDeal(openDeal)}>Edit</button>
+              )}
+              {(role === "moderator" || openDeal?.user_id === user?.id) && (
+                <button style={{ ...styles.btn, color: "#e24b4a", borderColor: "#e24b4a", fontSize: 13 }}
+                  onClick={() => handleDeleteDeal(openDeal.id)}>Delete deal</button>
+              )}
+            </div>
           </div>
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 20 }}>
             <div style={styles.cardHeader}>
@@ -497,11 +548,11 @@ export default function MealDeals() {
       {/* POST A DEAL */}
       {screen === "post" && (
         <div style={styles.page}>
-          <button style={styles.backBtn} onClick={() => setScreen("home")}>← Back</button>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Post a deal</div>
-          <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 20 }}>Share a deal you've found — help the community eat well for less.</div>
+          <button style={styles.backBtn} onClick={() => { setEditingDealId(null); setScreen(editingDealId ? "deal" : "home"); }}>← Back</button>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{editingDealId ? "Edit deal" : "Post a deal"}</div>
+          <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 20 }}>{editingDealId ? "Update the details below." : "Share a deal you've found — help the community eat well for less."}</div>
 
-          {postSuccess && <div style={styles.successBanner}>🎉 Deal posted! Taking you back...</div>}
+          {postSuccess && <div style={styles.successBanner}>{editingDealId ? "✓ Deal updated!" : "🎉 Deal posted! Taking you back..."}</div>}
 
           <div style={styles.formCard}>
             <div style={styles.sectionLabel}>Restaurant info</div>
@@ -575,7 +626,7 @@ export default function MealDeals() {
           <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
             <button style={{ ...styles.btn, padding: "12px 20px", fontSize: 14 }} onClick={() => setScreen("home")}>Cancel</button>
             <button style={{ ...styles.btnPrimary, flex: 1, fontSize: 15 }} onClick={handlePostDeal} disabled={geocoding}>
-              {geocoding ? "Finding location..." : "Post deal →"}
+              {geocoding ? "Finding location..." : editingDealId ? "Save changes →" : "Post deal →"}
             </button>
           </div>
         </div>
