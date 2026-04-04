@@ -11,6 +11,7 @@ const mapDeal = (d) => ({
   ...d,
   mealTime: d.meal_time,
   normalPrice: d.normal_price,
+  expiredAt: d.expired_at,
   comments: (d.comments || []).map(c => ({ ...c, user: c.username, votes: 0 })),
 });
 
@@ -101,6 +102,14 @@ export default function MealDeals() {
     if (!error) {
       setDeals(prev => prev.filter(d => d.id !== dealId));
       if (selectedDeal === dealId) setScreen("home");
+    }
+  };
+
+  const handleToggleExpired = async (deal) => {
+    const newVal = deal.expiredAt ? null : new Date().toISOString();
+    const { error } = await supabase.from("deals").update({ expired_at: newVal }).eq("id", deal.id);
+    if (!error) {
+      setDeals(prev => prev.map(d => d.id === deal.id ? { ...d, expiredAt: newVal } : d));
     }
   };
 
@@ -303,6 +312,7 @@ export default function MealDeals() {
     emptyState: { textAlign: "center", padding: "60px 20px", color: "var(--text-muted)" },
     includesRow: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 },
     includeBadge: { background: "#e6f1fb", border: "1px solid #85b7eb", color: "#185fa5", fontSize: 11, padding: "2px 8px", borderRadius: 20 },
+    expiredBadge: { display: "inline-flex", alignItems: "center", gap: 4, background: "#fdecea", border: "1px solid #e24b4a", color: "#a32d2d", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap" },
   };
 
   const css = `
@@ -456,7 +466,16 @@ export default function MealDeals() {
         <div style={styles.page}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <button style={styles.backBtn} onClick={() => setScreen("home")}>← Back to deals</button>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {openDeal?.expiredAt && (
+                <span style={styles.expiredBadge}>🚩 Expired {new Date(openDeal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+              )}
+              {(role === "moderator" || openDeal?.user_id === user?.id) && (
+                <button style={{ ...styles.btn, fontSize: 13, ...(openDeal?.expiredAt ? {} : { color: "#a32d2d", borderColor: "#e24b4a" }) }}
+                  onClick={() => handleToggleExpired(openDeal)}>
+                  {openDeal?.expiredAt ? "Mark active" : "🚩 Mark expired"}
+                </button>
+              )}
               {(role === "moderator" || openDeal?.user_id === user?.id) && (
                 <button style={{ ...styles.btn, fontSize: 13 }} onClick={() => openEditDeal(openDeal)}>Edit</button>
               )}
@@ -902,6 +921,7 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
             <span style={styles.badge}>{deal.mealTime}</span>
             <span style={styles.badge}>{deal.category}</span>
             {deal.verified && <span style={styles.verified}>✓ Verified</span>}
+            {deal.expiredAt && <span style={styles.expiredBadge}>🚩 Expired {new Date(deal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
           </div>
           <div style={styles.desc}>{deal.description}</div>
           <div style={styles.metaRow}>
