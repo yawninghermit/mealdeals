@@ -429,8 +429,8 @@ export default function MealDeals() {
                   <div style={{ ...styles.dealTitle, fontSize: 17 }}>{openDeal.title}</div>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                  {openDeal.normalPrice && <span style={styles.badge}>{openDeal.normalPrice}</span>}
                   <span style={styles.priceBadge}>{openDeal.price}</span>
-                  {openDeal.normalPrice && <span style={{ ...styles.badge, textDecoration: "line-through" }}>{openDeal.normalPrice}</span>}
                   <span style={styles.badge}>{openDeal.mealTime}</span>
                   <span style={styles.badge}>{openDeal.category}</span>
                   {openDeal.verified && <span style={styles.verified}>✓ Verified</span>}
@@ -840,8 +840,8 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
         <div style={styles.dealBody}>
           <div style={styles.titleRow}>
             <span style={styles.dealTitle}>{deal.title}</span>
+            {deal.normalPrice && <span style={styles.badge}>{deal.normalPrice}</span>}
             <span style={styles.priceBadge}>{deal.price}</span>
-            {deal.normalPrice && <span style={{ ...styles.badge, textDecoration: "line-through" }}>{deal.normalPrice}</span>}
             {canDelete && (
               <span onClick={e => { e.stopPropagation(); onDelete(deal.id); }}
                 style={{ marginLeft: "auto", fontSize: 12, color: "#e24b4a", cursor: "pointer", flexShrink: 0 }}>Delete</span>
