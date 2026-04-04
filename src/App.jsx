@@ -429,7 +429,7 @@ export default function MealDeals() {
                   <div style={{ ...styles.dealTitle, fontSize: 17 }}>{openDeal.title}</div>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                  {openDeal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden" }}>{openDeal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom right, transparent calc(50% - 0.7px), var(--text-muted) calc(50% - 0.7px), var(--text-muted) calc(50% + 0.7px), transparent calc(50% + 0.7px))", pointerEvents: "none" }} /></span>}
+                  {openDeal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden" }}>{openDeal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
                   <span style={styles.priceBadge}>{openDeal.price}</span>
                   <span style={styles.badge}>{openDeal.mealTime}</span>
                   <span style={styles.badge}>{openDeal.category}</span>
@@ -840,7 +840,7 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
         <div style={styles.dealBody}>
           <div style={styles.titleRow}>
             <span style={styles.dealTitle}>{deal.title}</span>
-            {deal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden" }}>{deal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom right, transparent calc(50% - 0.7px), var(--text-muted) calc(50% - 0.7px), var(--text-muted) calc(50% + 0.7px), transparent calc(50% + 0.7px))", pointerEvents: "none" }} /></span>}
+            {deal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden" }}>{deal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
             <span style={styles.priceBadge}>{deal.price}</span>
             {canDelete && (
               <span onClick={e => { e.stopPropagation(); onDelete(deal.id); }}
