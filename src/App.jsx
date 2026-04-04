@@ -841,6 +841,7 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
           <div style={styles.titleRow}>
             <span style={styles.dealTitle}>{deal.title}</span>
             <span style={styles.priceBadge}>{deal.price}</span>
+            {deal.normalPrice && <span style={{ ...styles.badge, textDecoration: "line-through" }}>{deal.normalPrice}</span>}
             {canDelete && (
               <span onClick={e => { e.stopPropagation(); onDelete(deal.id); }}
                 style={{ marginLeft: "auto", fontSize: 12, color: "#e24b4a", cursor: "pointer", flexShrink: 0 }}>Delete</span>
