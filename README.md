@@ -17,7 +17,10 @@ A community-driven app for finding and sharing food deals in your area.
 ## Features
 
 - Browse and search food deals by meal time (Breakfast, Lunch, Dinner)
-- Post deals with location, price, and schedule
+- Filter deals by day of the week (multi-select, defaults to today)
+- Post deals with location, price, normal price, and schedule
+- Edit your own deals after posting
+- Mark deals as expired with a date stamp (owner/mod only)
 - Upvote / downvote deals
 - Comment on deals
 - Moderator role for content management
