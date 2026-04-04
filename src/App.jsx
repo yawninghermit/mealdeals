@@ -429,7 +429,7 @@ export default function MealDeals() {
                   <div style={{ ...styles.dealTitle, fontSize: 17 }}>{openDeal.title}</div>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                  {openDeal.normalPrice && <span style={styles.badge}>{openDeal.normalPrice}</span>}
+                  {openDeal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden" }}>{openDeal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom right, transparent calc(50% - 0.7px), var(--text-muted) calc(50% - 0.7px), var(--text-muted) calc(50% + 0.7px), transparent calc(50% + 0.7px))", pointerEvents: "none" }} /></span>}
                   <span style={styles.priceBadge}>{openDeal.price}</span>
                   <span style={styles.badge}>{openDeal.mealTime}</span>
                   <span style={styles.badge}>{openDeal.category}</span>
@@ -528,11 +528,11 @@ export default function MealDeals() {
             <div style={styles.row2}>
               <div style={styles.field}>
                 <label style={styles.label}>Deal price *</label>
-                <input style={styles.textInput} placeholder="e.g. $7, $1/slice, 50% off" value={postForm.price} onChange={e => setPostForm(p => ({ ...p, price: e.target.value }))} />
+                <input style={styles.textInput} placeholder="e.g. $7, $1/slice, 50% off" value={postForm.price} onChange={e => { const v = e.target.value; setPostForm(p => ({ ...p, price: v && !v.startsWith("$") ? "$" + v : v })); }} />
               </div>
               <div style={styles.field}>
                 <label style={styles.label}>Normal price</label>
-                <input style={styles.textInput} placeholder="$0.00 (shows savings)" value={postForm.normalPrice} onChange={e => setPostForm(p => ({ ...p, normalPrice: e.target.value }))} />
+                <input style={styles.textInput} placeholder="$0.00 (shows savings)" value={postForm.normalPrice} onChange={e => { const v = e.target.value; setPostForm(p => ({ ...p, normalPrice: v && !v.startsWith("$") ? "$" + v : v })); }} />
               </div>
             </div>
           </div>
@@ -840,7 +840,7 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
         <div style={styles.dealBody}>
           <div style={styles.titleRow}>
             <span style={styles.dealTitle}>{deal.title}</span>
-            {deal.normalPrice && <span style={styles.badge}>{deal.normalPrice}</span>}
+            {deal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden" }}>{deal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom right, transparent calc(50% - 0.7px), var(--text-muted) calc(50% - 0.7px), var(--text-muted) calc(50% + 0.7px), transparent calc(50% + 0.7px))", pointerEvents: "none" }} /></span>}
             <span style={styles.priceBadge}>{deal.price}</span>
             {canDelete && (
               <span onClick={e => { e.stopPropagation(); onDelete(deal.id); }}
