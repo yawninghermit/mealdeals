@@ -63,6 +63,7 @@ export default function MealDeals() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState(null);
   const imageInputRef = useRef(null);
   const [geocoding, setGeocoding] = useState(false);
   const [postSuccess, setPostSuccess] = useState(false);
@@ -194,9 +195,13 @@ export default function MealDeals() {
     const ext = file.name.split(".").pop();
     const path = `${user.id}/${Date.now()}.${ext}`;
     setUploadingImage(true);
+    setImageError(null);
     const { error } = await supabase.storage.from("deal-images").upload(path, file, { upsert: true });
     setUploadingImage(false);
-    if (error) return null;
+    if (error) {
+      setImageError(`Upload failed: ${error.message}`);
+      return null;
+    }
     const { data } = supabase.storage.from("deal-images").getPublicUrl(path);
     return data.publicUrl;
   };
@@ -700,13 +705,15 @@ export default function MealDeals() {
                 <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>Take a picture or choose from your library</div>
               </div>
             )}
-            <input ref={imageInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+            <input ref={imageInputRef} type="file" accept="image/*" style={{ display: "none" }}
               onChange={e => {
                 const file = e.target.files?.[0];
                 if (!file) return;
                 setImageFile(file);
                 setImagePreview(URL.createObjectURL(file));
+                setImageError(null);
               }} />
+            {imageError && <div style={{ fontSize: 12, color: "#e24b4a", marginTop: 6 }}>{imageError}</div>}
           </div>
 
           <div style={styles.formCard}>
