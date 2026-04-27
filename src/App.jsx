@@ -221,6 +221,7 @@ export default function MealDeals() {
     let imageUrl = imagePreview && !imageFile ? imagePreview : null;
     if (imageFile) {
       imageUrl = await uploadDealImage(imageFile);
+      if (!imageUrl) return;
     }
 
     if (editingDealId) {
