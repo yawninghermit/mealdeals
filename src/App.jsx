@@ -12,6 +12,7 @@ const mapDeal = (d) => ({
   mealTime: d.meal_time,
   normalPrice: d.normal_price,
   expiredAt: d.expired_at,
+  imageUrl: d.image_url ?? null,
   comments: (d.comments || []).map(c => ({ ...c, user: c.username, votes: 0 })),
 });
 
@@ -59,6 +60,10 @@ export default function MealDeals() {
     title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "",
     mealTime: "Lunch", days: [], includes: []
   });
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const imageInputRef = useRef(null);
   const [geocoding, setGeocoding] = useState(false);
   const [postSuccess, setPostSuccess] = useState(false);
   const [editingDealId, setEditingDealId] = useState(null);
@@ -179,8 +184,21 @@ export default function MealDeals() {
       days: deal.days || [],
       includes: deal.includes || [],
     });
+    setImageFile(null);
+    setImagePreview(deal.imageUrl || null);
     setEditingDealId(deal.id);
     setScreen("post");
+  };
+
+  const uploadDealImage = async (file) => {
+    const ext = file.name.split(".").pop();
+    const path = `${user.id}/${Date.now()}.${ext}`;
+    setUploadingImage(true);
+    const { error } = await supabase.storage.from("deal-images").upload(path, file, { upsert: true });
+    setUploadingImage(false);
+    if (error) return null;
+    const { data } = supabase.storage.from("deal-images").getPublicUrl(path);
+    return data.publicUrl;
   };
 
   const handlePostDeal = async () => {
@@ -193,6 +211,11 @@ export default function MealDeals() {
       const coords = await geocodeAddress(postForm.address.trim());
       setGeocoding(false);
       if (coords) { lat = coords.lat; lng = coords.lng; }
+    }
+
+    let imageUrl = imagePreview && !imageFile ? imagePreview : null;
+    if (imageFile) {
+      imageUrl = await uploadDealImage(imageFile);
     }
 
     if (editingDealId) {
@@ -210,6 +233,7 @@ export default function MealDeals() {
           address: postForm.address.trim() || null,
           lat,
           lng,
+          ...(imageFile || imagePreview === null ? { image_url: imageUrl } : {}),
         })
         .eq("id", editingDealId)
         .select("*, comments(*)")
@@ -218,6 +242,8 @@ export default function MealDeals() {
         setDeals(prev => prev.map(d => d.id === editingDealId ? mapDeal(data) : d));
         setEditingDealId(null);
         setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTime: "Lunch", days: [], includes: [] });
+        setImageFile(null);
+        setImagePreview(null);
         setPostSuccess(true);
         setTimeout(() => { setPostSuccess(false); setScreen("deal"); }, 1800);
       }
@@ -243,6 +269,7 @@ export default function MealDeals() {
         address: postForm.address.trim() || null,
         lat,
         lng,
+        image_url: imageUrl,
       })
       .select("*, comments(*)")
       .single();
@@ -250,6 +277,8 @@ export default function MealDeals() {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
       setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTime: "Lunch", days: [], includes: [] });
+      setImageFile(null);
+      setImagePreview(null);
       setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
     }
   };
@@ -542,6 +571,9 @@ export default function MealDeals() {
                   <span style={styles.badge}>{openDeal.category}</span>
                   {openDeal.verified && <span style={styles.verified}>✓ Verified</span>}
                 </div>
+                {openDeal.imageUrl && (
+                  <img src={openDeal.imageUrl} alt={openDeal.title} style={{ width: "100%", maxHeight: 280, objectFit: "cover", borderRadius: 10, marginBottom: 12, display: "block" }} />
+                )}
                 <div style={{ fontSize: 15, color: "var(--text)", marginBottom: 12, lineHeight: 1.6 }}>{openDeal.description}</div>
                 <div style={styles.metaRow}>
                   <span>📍 {openDeal.restaurant}</span>
@@ -653,6 +685,31 @@ export default function MealDeals() {
           </div>
 
           <div style={styles.formCard}>
+            <div style={styles.sectionLabel}>Photo <span style={{ color: "var(--text-faint)", fontWeight: 400, textTransform: "none", fontSize: 11 }}>(optional)</span></div>
+            {imagePreview ? (
+              <div style={{ position: "relative", marginBottom: 12 }}>
+                <img src={imagePreview} alt="Deal preview" style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 10, display: "block" }} />
+                <button onClick={() => { setImageFile(null); setImagePreview(null); if (imageInputRef.current) imageInputRef.current.value = ""; }}
+                  style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.55)", border: "none", color: "#fff", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+              </div>
+            ) : (
+              <div onClick={() => imageInputRef.current?.click()}
+                style={{ border: "1.5px dashed var(--border)", borderRadius: 10, padding: "24px 16px", textAlign: "center", cursor: "pointer", background: "var(--surface-2)", marginBottom: 4 }}>
+                <div style={{ fontSize: 28, marginBottom: 6 }}>📷</div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 600 }}>Tap to add a photo</div>
+                <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>Take a picture or choose from your library</div>
+              </div>
+            )}
+            <input ref={imageInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setImageFile(file);
+                setImagePreview(URL.createObjectURL(file));
+              }} />
+          </div>
+
+          <div style={styles.formCard}>
             <div style={styles.sectionLabel}>What's included</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {["Drink", "Side", "Dessert", "Free refills", "Shareable", "Dine-in only"].map(item => (
@@ -689,8 +746,8 @@ export default function MealDeals() {
 
           <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
             <button style={{ ...styles.btn, padding: "12px 20px", fontSize: 14 }} onClick={() => setScreen("home")}>Cancel</button>
-            <button style={{ ...styles.btnPrimary, flex: 1, fontSize: 15 }} onClick={handlePostDeal} disabled={geocoding}>
-              {geocoding ? "Finding location..." : editingDealId ? "Save changes →" : "Post deal →"}
+            <button style={{ ...styles.btnPrimary, flex: 1, fontSize: 15 }} onClick={handlePostDeal} disabled={geocoding || uploadingImage}>
+              {uploadingImage ? "Uploading photo..." : geocoding ? "Finding location..." : editingDealId ? "Save changes →" : "Post deal →"}
             </button>
           </div>
         </div>
@@ -969,6 +1026,9 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
             {deal.expiredAt && <span style={styles.expiredBadge}>🚩 Expired {new Date(deal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
           </div>
           <div style={styles.desc}>{deal.description}</div>
+          {deal.imageUrl && (
+            <img src={deal.imageUrl} alt={deal.title} style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 8, marginBottom: 8, display: "block" }} />
+          )}
           <div style={styles.metaRow}>
             <span>📍 {deal.restaurant}</span>
             <span>📏 {deal.distance}</span>
