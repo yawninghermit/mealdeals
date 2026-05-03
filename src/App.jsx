@@ -35,6 +35,17 @@ const avatarColor = (name = "") => {
   return colors[Math.abs(h) % colors.length];
 };
 
+const buildTree = (comments) => {
+  const map = {};
+  const roots = [];
+  comments.forEach(c => { map[c.id] = { ...c, replies: [] }; });
+  comments.forEach(c => {
+    if (c.parent_id && map[c.parent_id]) map[c.parent_id].replies.push(map[c.id]);
+    else roots.push(map[c.id]);
+  });
+  return roots;
+};
+
 const MEAL_TIMES = ["All", "Breakfast", "Lunch", "Dinner"];
 const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
@@ -610,62 +621,12 @@ export default function MealDeals() {
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>
                 💬 {openDeal.comments.length} comment{openDeal.comments.length !== 1 ? "s" : ""}
               </div>
-              {openDeal.comments.filter(c => !c.parent_id).map(c => (
-                <div key={c.id}>
-                  <div style={styles.commentBox}>
-                    <div style={{ ...styles.commentAvatar, background: avatarColor(c.user) }}>
-                      {(c.user || "?")[0].toUpperCase()}
-                    </div>
-                    <div style={styles.commentBody}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div>
-                          <span style={styles.commentUser}>{c.user}</span>
-                          <span style={styles.commentTime}>{timeAgo(c.created_at)}</span>
-                        </div>
-                        {(role === "moderator" || c.user_id === user?.id) && (
-                          <span onClick={() => handleDeleteComment(openDeal.id, c.id)}
-                            style={{ fontSize: 11, color: "#e24b4a", cursor: "pointer" }}>Delete</span>
-                        )}
-                      </div>
-                      <div style={styles.commentText}>{c.text}</div>
-                      {user && (
-                        <span onClick={() => { setReplyingTo(replyingTo === c.id ? null : c.id); setReplyText(""); }}
-                          style={{ fontSize: 12, color: "var(--accent)", cursor: "pointer", marginTop: 4, display: "inline-block" }}>
-                          {replyingTo === c.id ? "Cancel" : "Reply"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {replyingTo === c.id && (
-                    <div style={{ ...styles.inputRow, marginLeft: 42, marginBottom: 8 }}>
-                      <input style={styles.input} placeholder={`Replying to ${c.user}...`} value={replyText}
-                        onChange={e => setReplyText(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && handleComment(openDeal.id, c.id)}
-                        autoFocus />
-                      <button style={styles.btnPrimary} onClick={() => handleComment(openDeal.id, c.id)}>Reply</button>
-                    </div>
-                  )}
-                  {openDeal.comments.filter(r => r.parent_id === c.id).map(r => (
-                    <div key={r.id} style={{ ...styles.commentBox, marginLeft: 42 }}>
-                      <div style={{ ...styles.commentAvatar, background: avatarColor(r.user), width: 26, height: 26, fontSize: 11 }}>
-                        {(r.user || "?")[0].toUpperCase()}
-                      </div>
-                      <div style={styles.commentBody}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <span style={styles.commentUser}>{r.user}</span>
-                            <span style={styles.commentTime}>{timeAgo(r.created_at)}</span>
-                          </div>
-                          {(role === "moderator" || r.user_id === user?.id) && (
-                            <span onClick={() => handleDeleteComment(openDeal.id, r.id)}
-                              style={{ fontSize: 11, color: "#e24b4a", cursor: "pointer" }}>Delete</span>
-                          )}
-                        </div>
-                        <div style={styles.commentText}>{r.text}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              {buildTree(openDeal.comments).map(node => (
+                <CommentNode key={node.id} node={node} dealId={openDeal.id}
+                  user={user} role={role}
+                  replyingTo={replyingTo} setReplyingTo={setReplyingTo}
+                  replyText={replyText} setReplyText={setReplyText}
+                  onComment={handleComment} onDelete={handleDeleteComment} styles={styles} />
               ))}
               {openDeal.comments.filter(c => !c.parent_id).length === 0 && (
                 <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 12 }}>No comments yet — be the first!</div>
@@ -1042,6 +1003,54 @@ function ResetPasswordModal({ onClose }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function CommentNode({ node, dealId, user, role, replyingTo, setReplyingTo, replyText, setReplyText, onComment, onDelete, styles, depth = 0 }) {
+  const indent = Math.min(depth * 36, 108);
+  const avatarSize = depth > 0 ? 26 : 32;
+  const avatarFont = depth > 0 ? 11 : 13;
+  return (
+    <div style={{ marginLeft: indent }}>
+      <div style={styles.commentBox}>
+        <div style={{ ...styles.commentAvatar, background: avatarColor(node.user), width: avatarSize, height: avatarSize, fontSize: avatarFont }}>
+          {(node.user || "?")[0].toUpperCase()}
+        </div>
+        <div style={styles.commentBody}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <span style={styles.commentUser}>{node.user}</span>
+              <span style={styles.commentTime}>{timeAgo(node.created_at)}</span>
+            </div>
+            {(role === "moderator" || node.user_id === user?.id) && (
+              <span onClick={() => onDelete(dealId, node.id)} style={{ fontSize: 11, color: "#e24b4a", cursor: "pointer" }}>Delete</span>
+            )}
+          </div>
+          <div style={styles.commentText}>{node.text}</div>
+          {user && (
+            <span onClick={() => { setReplyingTo(replyingTo === node.id ? null : node.id); setReplyText(""); }}
+              style={{ fontSize: 12, color: "var(--accent)", cursor: "pointer", marginTop: 4, display: "inline-block" }}>
+              {replyingTo === node.id ? "Cancel" : "Reply"}
+            </span>
+          )}
+        </div>
+      </div>
+      {replyingTo === node.id && (
+        <div style={{ ...styles.inputRow, marginLeft: 36, marginBottom: 8 }}>
+          <input style={styles.input} placeholder={`Replying to ${node.user}...`} value={replyText}
+            onChange={e => setReplyText(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && onComment(dealId, node.id)}
+            autoFocus />
+          <button style={styles.btnPrimary} onClick={() => onComment(dealId, node.id)}>Reply</button>
+        </div>
+      )}
+      {node.replies.map(r => (
+        <CommentNode key={r.id} node={r} dealId={dealId} user={user} role={role}
+          replyingTo={replyingTo} setReplyingTo={setReplyingTo}
+          replyText={replyText} setReplyText={setReplyText}
+          onComment={onComment} onDelete={onDelete} styles={styles} depth={depth + 1} />
+      ))}
     </div>
   );
 }
