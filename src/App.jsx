@@ -56,6 +56,8 @@ export default function MealDeals() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyText, setReplyText] = useState("");
   const [postForm, setPostForm] = useState({
     title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "",
     mealTime: "Lunch", days: [], includes: []
@@ -137,14 +139,14 @@ export default function MealDeals() {
     }
   };
 
-  const handleComment = async (dealId) => {
+  const handleComment = async (dealId, parentId = null) => {
     if (!user) { setAuthModal("login"); return; }
-    if (!newComment.trim()) return;
-    const text = newComment.trim();
-    setNewComment("");
+    const text = parentId ? replyText.trim() : newComment.trim();
+    if (!text) return;
+    if (parentId) { setReplyText(""); setReplyingTo(null); } else setNewComment("");
     const { data, error } = await supabase
       .from("comments")
-      .insert({ deal_id: dealId, username: username(user), text, user_id: user.id })
+      .insert({ deal_id: dealId, username: username(user), text, user_id: user.id, parent_id: parentId })
       .select()
       .single();
     if (!error && data) {
@@ -608,27 +610,64 @@ export default function MealDeals() {
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>
                 💬 {openDeal.comments.length} comment{openDeal.comments.length !== 1 ? "s" : ""}
               </div>
-              {openDeal.comments.map(c => (
-                <div key={c.id} style={styles.commentBox}>
-                  <div style={{ ...styles.commentAvatar, background: avatarColor(c.user) }}>
-                    {(c.user || "?")[0].toUpperCase()}
-                  </div>
-                  <div style={styles.commentBody}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <span style={styles.commentUser}>{c.user}</span>
-                        <span style={styles.commentTime}>{timeAgo(c.created_at)}</span>
+              {openDeal.comments.filter(c => !c.parent_id).map(c => (
+                <div key={c.id}>
+                  <div style={styles.commentBox}>
+                    <div style={{ ...styles.commentAvatar, background: avatarColor(c.user) }}>
+                      {(c.user || "?")[0].toUpperCase()}
+                    </div>
+                    <div style={styles.commentBody}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <span style={styles.commentUser}>{c.user}</span>
+                          <span style={styles.commentTime}>{timeAgo(c.created_at)}</span>
+                        </div>
+                        {(role === "moderator" || c.user_id === user?.id) && (
+                          <span onClick={() => handleDeleteComment(openDeal.id, c.id)}
+                            style={{ fontSize: 11, color: "#e24b4a", cursor: "pointer" }}>Delete</span>
+                        )}
                       </div>
-                      {(role === "moderator" || c.user_id === user?.id) && (
-                        <span onClick={() => handleDeleteComment(openDeal.id, c.id)}
-                          style={{ fontSize: 11, color: "#e24b4a", cursor: "pointer" }}>Delete</span>
+                      <div style={styles.commentText}>{c.text}</div>
+                      {user && (
+                        <span onClick={() => { setReplyingTo(replyingTo === c.id ? null : c.id); setReplyText(""); }}
+                          style={{ fontSize: 12, color: "var(--accent)", cursor: "pointer", marginTop: 4, display: "inline-block" }}>
+                          {replyingTo === c.id ? "Cancel" : "Reply"}
+                        </span>
                       )}
                     </div>
-                    <div style={styles.commentText}>{c.text}</div>
                   </div>
+                  {replyingTo === c.id && (
+                    <div style={{ ...styles.inputRow, marginLeft: 42, marginBottom: 8 }}>
+                      <input style={styles.input} placeholder={`Replying to ${c.user}...`} value={replyText}
+                        onChange={e => setReplyText(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && handleComment(openDeal.id, c.id)}
+                        autoFocus />
+                      <button style={styles.btnPrimary} onClick={() => handleComment(openDeal.id, c.id)}>Reply</button>
+                    </div>
+                  )}
+                  {openDeal.comments.filter(r => r.parent_id === c.id).map(r => (
+                    <div key={r.id} style={{ ...styles.commentBox, marginLeft: 42 }}>
+                      <div style={{ ...styles.commentAvatar, background: avatarColor(r.user), width: 26, height: 26, fontSize: 11 }}>
+                        {(r.user || "?")[0].toUpperCase()}
+                      </div>
+                      <div style={styles.commentBody}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <span style={styles.commentUser}>{r.user}</span>
+                            <span style={styles.commentTime}>{timeAgo(r.created_at)}</span>
+                          </div>
+                          {(role === "moderator" || r.user_id === user?.id) && (
+                            <span onClick={() => handleDeleteComment(openDeal.id, r.id)}
+                              style={{ fontSize: 11, color: "#e24b4a", cursor: "pointer" }}>Delete</span>
+                          )}
+                        </div>
+                        <div style={styles.commentText}>{r.text}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
-              {openDeal.comments.length === 0 && (
+              {openDeal.comments.filter(c => !c.parent_id).length === 0 && (
                 <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 12 }}>No comments yet — be the first!</div>
               )}
               {user ? (
