@@ -1007,50 +1007,89 @@ function ResetPasswordModal({ onClose }) {
   );
 }
 
-function CommentNode({ node, dealId, user, role, replyingTo, setReplyingTo, replyText, setReplyText, onComment, onDelete, styles, depth = 0 }) {
-  const indent = Math.min(depth * 36, 108);
-  const avatarSize = depth > 0 ? 26 : 32;
-  const avatarFont = depth > 0 ? 11 : 13;
+function CommentNode({ node, dealId, user, role, replyingTo, setReplyingTo, replyText, setReplyText, onComment, onDelete, styles }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const totalReplies = (n) => n.replies.reduce((acc, r) => acc + 1 + totalReplies(r), 0);
+  const replyCount = totalReplies(node);
+
   return (
-    <div style={{ marginLeft: indent }}>
-      <div style={styles.commentBox}>
-        <div style={{ ...styles.commentAvatar, background: avatarColor(node.user), width: avatarSize, height: avatarSize, fontSize: avatarFont }}>
+    <div style={{ display: "flex", gap: 0, marginBottom: 2 }}>
+      {/* Left column: avatar + collapse line */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 36, flexShrink: 0 }}>
+        <div style={{ ...styles.commentAvatar, background: avatarColor(node.user), width: 28, height: 28, fontSize: 12, flexShrink: 0 }}>
           {(node.user || "?")[0].toUpperCase()}
         </div>
-        <div style={styles.commentBody}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <span style={styles.commentUser}>{node.user}</span>
-              <span style={styles.commentTime}>{timeAgo(node.created_at)}</span>
-            </div>
-            {(role === "moderator" || node.user_id === user?.id) && (
-              <span onClick={() => onDelete(dealId, node.id)} style={{ fontSize: 11, color: "#e24b4a", cursor: "pointer" }}>Delete</span>
-            )}
-          </div>
-          <div style={styles.commentText}>{node.text}</div>
-          {user && (
-            <span onClick={() => { setReplyingTo(replyingTo === node.id ? null : node.id); setReplyText(""); }}
-              style={{ fontSize: 12, color: "var(--accent)", cursor: "pointer", marginTop: 4, display: "inline-block" }}>
-              {replyingTo === node.id ? "Cancel" : "Reply"}
+        {!collapsed && (
+          <div
+            style={{ width: 2, flex: 1, minHeight: 8, background: "var(--border)", marginTop: 4, cursor: "pointer", borderRadius: 1, transition: "background 0.15s" }}
+            onClick={() => setCollapsed(true)}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--accent)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--border)"}
+          />
+        )}
+      </div>
+
+      {/* Right column: content + children */}
+      <div style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
+        {/* Header row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: collapsed ? 0 : 3 }}>
+          <span style={styles.commentUser}>{node.user}</span>
+          <span style={styles.commentTime}>{timeAgo(node.created_at)}</span>
+          {collapsed && (
+            <span onClick={() => setCollapsed(false)}
+              style={{ fontSize: 11, color: "var(--accent)", cursor: "pointer", fontWeight: 600 }}>
+              [+] {replyCount > 0 ? `${replyCount} repl${replyCount === 1 ? "y" : "ies"}` : "expand"}
             </span>
           )}
         </div>
+
+        {!collapsed && (
+          <>
+            <div style={{ ...styles.commentText, marginBottom: 6 }}>{node.text}</div>
+
+            {/* Action row */}
+            <div style={{ display: "flex", gap: 2, alignItems: "center", marginBottom: 8 }}>
+              {user && (
+                <button onClick={() => { setReplyingTo(replyingTo === node.id ? null : node.id); setReplyText(""); }}
+                  style={{ background: "none", border: "none", fontSize: 12, fontWeight: 700, color: "var(--text-muted)", cursor: "pointer", padding: "3px 6px", borderRadius: 4, fontFamily: "inherit" }}>
+                  Reply
+                </button>
+              )}
+              {(role === "moderator" || node.user_id === user?.id) && (
+                <button onClick={() => onDelete(dealId, node.id)}
+                  style={{ background: "none", border: "none", fontSize: 12, color: "var(--text-faint)", cursor: "pointer", padding: "3px 6px", borderRadius: 4, fontFamily: "inherit" }}>
+                  Delete
+                </button>
+              )}
+            </div>
+
+            {/* Inline reply box */}
+            {replyingTo === node.id && (
+              <div style={{ marginBottom: 12 }}>
+                <textarea
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", resize: "none", height: 72, lineHeight: 1.5, marginBottom: 8, display: "block" }}
+                  placeholder={`Reply to ${node.user}...`}
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  autoFocus
+                />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={{ ...styles.btn, fontSize: 12, padding: "6px 12px" }} onClick={() => { setReplyingTo(null); setReplyText(""); }}>Cancel</button>
+                  <button style={{ ...styles.btnPrimary, fontSize: 12, padding: "6px 14px" }} onClick={() => onComment(dealId, node.id)}>Reply</button>
+                </div>
+              </div>
+            )}
+
+            {/* Nested replies */}
+            {node.replies.map(r => (
+              <CommentNode key={r.id} node={r} dealId={dealId} user={user} role={role}
+                replyingTo={replyingTo} setReplyingTo={setReplyingTo}
+                replyText={replyText} setReplyText={setReplyText}
+                onComment={onComment} onDelete={onDelete} styles={styles} />
+            ))}
+          </>
+        )}
       </div>
-      {replyingTo === node.id && (
-        <div style={{ ...styles.inputRow, marginLeft: 36, marginBottom: 8 }}>
-          <input style={styles.input} placeholder={`Replying to ${node.user}...`} value={replyText}
-            onChange={e => setReplyText(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && onComment(dealId, node.id)}
-            autoFocus />
-          <button style={styles.btnPrimary} onClick={() => onComment(dealId, node.id)}>Reply</button>
-        </div>
-      )}
-      {node.replies.map(r => (
-        <CommentNode key={r.id} node={r} dealId={dealId} user={user} role={role}
-          replyingTo={replyingTo} setReplyingTo={setReplyingTo}
-          replyText={replyText} setReplyText={setReplyText}
-          onComment={onComment} onDelete={onDelete} styles={styles} depth={depth + 1} />
-      ))}
     </div>
   );
 }
