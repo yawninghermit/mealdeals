@@ -1038,10 +1038,7 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
             <img src={deal.imageUrl} alt={deal.title} style={{ width: "100%", height: "auto", borderRadius: 8, marginBottom: 8, display: "block" }} />
           )}
           <div style={styles.metaRow}>
-            <span>📍 {deal.restaurant}</span>
-            <span>📏 {deal.distance}</span>
-            <span>🕐 {deal.hours}</span>
-            <span onClick={e => { e.stopPropagation(); setShowComments(s => !s); }} style={{ ...styles.commentToggle, marginLeft: "auto" }}>
+            <span onClick={e => { e.stopPropagation(); setShowComments(s => !s); }} style={styles.commentToggle}>
               💬 {deal.comments.length} {deal.comments.length === 1 ? "comment" : "comments"}
             </span>
           </div>
