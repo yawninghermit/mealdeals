@@ -75,6 +75,7 @@ export default function MealDeals() {
   });
   const [mealFilter, setMealFilter] = useState("All");
   const [dayFilter, setDayFilter] = useState([DAYS_SHORT[new Date().getDay()]]);
+  const [sortBy, setSortBy] = useState("top");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
@@ -347,7 +348,15 @@ export default function MealDeals() {
     if (searchQuery && !d.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !d.restaurant.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
-  }).sort((a, b) => b.votes - a.votes);
+  }).sort((a, b) => {
+    if (sortBy === "newest") return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    if (sortBy === "expiring") {
+      const ax = a.expiredAt ? new Date(a.expiredAt).getTime() : Infinity;
+      const bx = b.expiredAt ? new Date(b.expiredAt).getTime() : Infinity;
+      return ax - bx;
+    }
+    return b.votes - a.votes;
+  });
 
   const openDeal = deals.find(d => d.id === selectedDeal);
 
@@ -491,6 +500,13 @@ export default function MealDeals() {
                 </button>
               );
             })}
+          </div>
+
+          <div style={styles.sortRow}>
+            <span>Sort:</span>
+            {[["top","Top voted"],["newest","Newest"],["expiring","Expiring soon"]].map(([k,label]) => (
+              <button key={k} style={sortBy === k ? styles.sortBtnActive : styles.sortBtn} onClick={() => setSortBy(k)}>{label}</button>
+            ))}
           </div>
 
           {loading && <div style={styles.emptyState}><div style={{ fontSize: 13 }}>Loading deals...</div></div>}
