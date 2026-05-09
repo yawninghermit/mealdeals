@@ -9,7 +9,7 @@ const supabase = createClient(
 
 const mapDeal = (d) => ({
   ...d,
-  mealTime: d.meal_time,
+  mealTimes: d.meal_times || [],
   normalPrice: d.normal_price,
   expiredAt: d.expired_at,
   imageUrl: d.image_url ?? null,
@@ -82,7 +82,7 @@ export default function MealDeals() {
   const [replyText, setReplyText] = useState("");
   const [postForm, setPostForm] = useState({
     title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "",
-    mealTime: "Lunch", days: [], includes: []
+    mealTimes: [], days: [], includes: []
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -206,7 +206,7 @@ export default function MealDeals() {
       price: deal.price,
       normalPrice: deal.normalPrice || "",
       description: deal.description || "",
-      mealTime: deal.mealTime,
+      mealTimes: deal.mealTimes || [],
       days: deal.days || [],
       includes: deal.includes || [],
     });
@@ -266,7 +266,7 @@ export default function MealDeals() {
           restaurant: postForm.restaurant,
           price: postForm.price,
           description: postForm.description,
-          meal_time: postForm.mealTime,
+          meal_times: postForm.mealTimes,
           days: postForm.days,
           includes: postForm.includes,
           normal_price: postForm.normalPrice.trim() || null,
@@ -285,7 +285,7 @@ export default function MealDeals() {
       } else {
         setDeals(prev => prev.map(d => d.id === editingDealId ? mapDeal(data) : d));
         setEditingDealId(null);
-        setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTime: "Lunch", days: [], includes: [] });
+        setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTimes: [], days: [], includes: [] });
         setImageFile(null);
         setImagePreview(null);
         setPostSuccess(true);
@@ -301,7 +301,7 @@ export default function MealDeals() {
         restaurant: postForm.restaurant,
         price: postForm.price,
         description: postForm.description,
-        meal_time: postForm.mealTime,
+        meal_times: postForm.mealTimes,
         days: postForm.days,
         includes: postForm.includes,
         votes: 1,
@@ -322,7 +322,7 @@ export default function MealDeals() {
     } else if (data) {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
-      setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTime: "Lunch", days: [], includes: [] });
+      setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTimes: [], days: [], includes: [] });
       setImageFile(null);
       setImagePreview(null);
       setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
@@ -342,7 +342,7 @@ export default function MealDeals() {
   };
 
   const filteredDeals = deals.filter(d => {
-    if (mealFilter !== "All" && d.mealTime !== mealFilter) return false;
+    if (mealFilter !== "All" && !(d.mealTimes || []).includes(mealFilter)) return false;
     if (dayFilter.length > 0 && d.days && d.days.length > 0 && !d.days.some(day => dayFilter.includes(day))) return false;
     if (searchQuery && !d.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !d.restaurant.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -560,7 +560,7 @@ export default function MealDeals() {
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                   {openDeal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden", border: "1px solid #000" }}>{openDeal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
                   <span style={styles.priceBadge}>{openDeal.price}</span>
-                  <span style={styles.badge}>{openDeal.mealTime}</span>
+                  {(openDeal.mealTimes || []).map(m => <span key={m} style={styles.badge}>{m}</span>)}
                   <span style={styles.badge}>{openDeal.category}</span>
                   {openDeal.verified && <span style={styles.verified}>✓ Verified</span>}
                 </div>
@@ -706,10 +706,11 @@ export default function MealDeals() {
 
           <div style={styles.formCard}>
             <div style={styles.sectionLabel}>Meal time</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>Pick one or more</div>
             <div style={styles.field}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {["Breakfast","Lunch","Dinner"].map(m => (
-                  <button key={m} style={postForm.mealTime === m ? styles.chipActive : styles.chip} onClick={() => setPostForm(p => ({ ...p, mealTime: m }))}>{m}</button>
+                  <button key={m} style={postForm.mealTimes.includes(m) ? styles.chipActive : styles.chip} onClick={() => setPostForm(p => ({ ...p, mealTimes: p.mealTimes.includes(m) ? p.mealTimes.filter(x => x !== m) : [...p.mealTimes, m] }))}>{m}</button>
                 ))}
               </div>
             </div>
@@ -1090,7 +1091,7 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
             )}
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-            <span style={styles.badge}>{deal.mealTime}</span>
+            {(deal.mealTimes || []).map(m => <span key={m} style={styles.badge}>{m}</span>)}
             <span style={styles.badge}>{deal.category}</span>
             {deal.verified && <span style={styles.verified}>✓ Verified</span>}
             {deal.expiredAt && <span style={styles.expiredBadge}>🚩 Expired {new Date(deal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
