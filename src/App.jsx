@@ -80,6 +80,7 @@ export default function MealDeals() {
   const imageInputRef = useRef(null);
   const [geocoding, setGeocoding] = useState(false);
   const [postSuccess, setPostSuccess] = useState(false);
+  const [postError, setPostError] = useState("");
   const [editingDealId, setEditingDealId] = useState(null);
 
   const fetchRole = async (userId) => {
@@ -200,6 +201,7 @@ export default function MealDeals() {
     });
     setImageFile(null);
     setImagePreview(deal.imageUrl || null);
+    setPostError("");
     setEditingDealId(deal.id);
     setScreen("post");
   };
@@ -222,13 +224,21 @@ export default function MealDeals() {
   const handlePostDeal = async () => {
     if (!user) { setAuthModal("login"); return; }
     if (!postForm.title || !postForm.restaurant || !postForm.price) return;
+    setPostError("");
 
-    let lat = null, lng = null;
-    if (postForm.address.trim()) {
+    const originalDeal = editingDealId ? deals.find(d => d.id === editingDealId) : null;
+    const addressChanged = !originalDeal || (postForm.address.trim() !== (originalDeal.address || "").trim());
+
+    let lat = originalDeal?.lat ?? null;
+    let lng = originalDeal?.lng ?? null;
+    if (postForm.address.trim() && addressChanged) {
       setGeocoding(true);
       const coords = await geocodeAddress(postForm.address.trim());
       setGeocoding(false);
       if (coords) { lat = coords.lat; lng = coords.lng; }
+      else { lat = null; lng = null; }
+    } else if (!postForm.address.trim()) {
+      lat = null; lng = null;
     }
 
     let imageUrl = imagePreview && !imageFile ? imagePreview : null;
@@ -257,7 +267,11 @@ export default function MealDeals() {
         .eq("id", editingDealId)
         .select("*, comments(*)")
         .single();
-      if (!error && data) {
+      if (error) {
+        setPostError(`Couldn't save: ${error.message}`);
+      } else if (!data) {
+        setPostError("Couldn't save — you may not have permission to edit this deal.");
+      } else {
         setDeals(prev => prev.map(d => d.id === editingDealId ? mapDeal(data) : d));
         setEditingDealId(null);
         setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTime: "Lunch", days: [], includes: [] });
@@ -292,7 +306,9 @@ export default function MealDeals() {
       })
       .select("*, comments(*)")
       .single();
-    if (!error && data) {
+    if (error) {
+      setPostError(`Couldn't post: ${error.message}`);
+    } else if (data) {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
       setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTime: "Lunch", days: [], includes: [] });
@@ -650,11 +666,12 @@ export default function MealDeals() {
       {/* POST A DEAL */}
       {screen === "post" && (
         <div style={styles.page}>
-          <button style={styles.backBtn} onClick={() => { setEditingDealId(null); setScreen(editingDealId ? "deal" : "home"); }}>← Back</button>
+          <button style={styles.backBtn} onClick={() => { setEditingDealId(null); setPostError(""); setScreen(editingDealId ? "deal" : "home"); }}>← Back</button>
           <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{editingDealId ? "Edit deal" : "Post a deal"}</div>
           <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 20 }}>{editingDealId ? "Update the details below." : "Share a deal you've found — help the community eat well for less."}</div>
 
           {postSuccess && <div style={styles.successBanner}>{editingDealId ? "✓ Deal updated!" : "🎉 Deal posted! Taking you back..."}</div>}
+          {postError && <div style={{ background: "#fce8e8", border: "1px solid #e24b4a", color: "#a02020", borderRadius: 12, padding: "12px 16px", fontSize: 14, marginBottom: 16 }}>{postError}</div>}
 
           <div style={styles.formCard}>
             <div style={styles.sectionLabel}>Restaurant info</div>
@@ -753,7 +770,7 @@ export default function MealDeals() {
           </div>
 
           <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-            <button style={{ ...styles.btn, padding: "12px 20px", fontSize: 14 }} onClick={() => setScreen("home")}>Cancel</button>
+            <button style={{ ...styles.btn, padding: "12px 20px", fontSize: 14 }} onClick={() => { setEditingDealId(null); setPostError(""); setScreen("home"); }}>Cancel</button>
             <button style={{ ...styles.btnPrimary, flex: 1, fontSize: 15 }} onClick={handlePostDeal} disabled={geocoding || uploadingImage}>
               {uploadingImage ? "Uploading photo..." : geocoding ? "Finding location..." : editingDealId ? "Save changes →" : "Post deal →"}
             </button>
