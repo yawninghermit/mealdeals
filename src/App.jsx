@@ -18,6 +18,16 @@ const mapDeal = (d) => ({
 
 const username = (user) => user?.email?.split("@")[0] ?? "anonymous";
 
+const useIsMobile = (breakpoint = 640) => {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < breakpoint);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [breakpoint]);
+  return isMobile;
+};
+
 const timeAgo = (ts) => {
   if (!ts) return "";
   const s = Math.floor((Date.now() - new Date(ts)) / 1000);
@@ -50,6 +60,7 @@ const MEAL_TIMES = ["All", "Breakfast", "Lunch", "Dinner"];
 const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
 export default function MealDeals() {
+  const isMobile = useIsMobile();
   const [screen, setScreen] = useState("home");
   const [selectedDeal, setSelectedDeal] = useState(null);
   const [deals, setDeals] = useState([]);
@@ -342,12 +353,12 @@ export default function MealDeals() {
 
   const styles = {
     root: { fontFamily: "'DM Sans', sans-serif", background: "var(--bg)", minHeight: "100vh", color: "var(--text)" },
-    nav: { display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderBottom: "1px solid var(--border)", background: "var(--surface)", position: "sticky", top: 0, zIndex: 10 },
-    logo: { fontSize: 20, fontWeight: 700, color: "var(--accent)", letterSpacing: "-0.5px", cursor: "pointer" },
-    navRight: { marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" },
-    navBtn: { padding: "7px 14px", borderRadius: 20, border: "1px solid var(--border)", fontSize: 13, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit" },
-    navBtnActive: { padding: "7px 14px", borderRadius: 20, border: "1px solid var(--accent)", fontSize: 13, background: "var(--accent)", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
-    page: { maxWidth: 720, margin: "0 auto", padding: "20px 16px" },
+    nav: { display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, padding: isMobile ? "12px 12px" : "14px 20px", borderBottom: "1px solid var(--border)", background: "var(--surface)", position: "sticky", top: 0, zIndex: 10 },
+    logo: { fontSize: isMobile ? 17 : 20, fontWeight: 700, color: "var(--accent)", letterSpacing: "-0.5px", cursor: "pointer" },
+    navRight: { marginLeft: "auto", display: "flex", gap: isMobile ? 6 : 8, alignItems: "center" },
+    navBtn: { padding: isMobile ? "8px 10px" : "7px 14px", borderRadius: 20, border: "1px solid var(--border)", fontSize: isMobile ? 12 : 13, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit" },
+    navBtnActive: { padding: isMobile ? "8px 10px" : "7px 14px", borderRadius: 20, border: "1px solid var(--accent)", fontSize: isMobile ? 12 : 13, background: "var(--accent)", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
+    page: { maxWidth: 720, margin: "0 auto", padding: isMobile ? "16px 12px" : "20px 16px" },
     filterBar: { display: "flex", gap: 8, overflowX: "auto", marginBottom: 12, paddingBottom: 4 },
     chip: { flexShrink: 0, padding: "6px 14px", borderRadius: 20, border: "1px solid var(--border)", fontSize: 13, background: "var(--surface)", color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" },
     chipActive: { flexShrink: 0, padding: "6px 14px", borderRadius: 20, border: "1px solid var(--accent)", fontSize: 13, background: "var(--accent-light)", color: "var(--accent-dark)", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, whiteSpace: "nowrap" },
@@ -356,10 +367,10 @@ export default function MealDeals() {
     sortBtnActive: { padding: "4px 10px", borderRadius: 6, border: "none", background: "var(--surface-2)", fontSize: 13, color: "var(--text)", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
     card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px", marginBottom: 12, cursor: "pointer", transition: "border-color 0.15s" },
     cardHeader: { display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 },
-    voteCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 38 },
-    voteBtn: { width: 30, height: 30, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" },
-    voteBtnUp: { width: 30, height: 30, borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent-light)", cursor: "pointer", fontSize: 13, color: "var(--accent-dark)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" },
-    voteBtnDown: { width: 30, height: 30, borderRadius: 8, border: "1px solid #e24b4a", background: "#fcebeb", cursor: "pointer", fontSize: 13, color: "#a32d2d", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" },
+    voteCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: isMobile ? 44 : 38 },
+    voteBtn: { width: isMobile ? 40 : 30, height: isMobile ? 40 : 30, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", fontSize: isMobile ? 16 : 13, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" },
+    voteBtnUp: { width: isMobile ? 40 : 30, height: isMobile ? 40 : 30, borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent-light)", cursor: "pointer", fontSize: isMobile ? 16 : 13, color: "var(--accent-dark)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" },
+    voteBtnDown: { width: isMobile ? 40 : 30, height: isMobile ? 40 : 30, borderRadius: 8, border: "1px solid #e24b4a", background: "#fcebeb", cursor: "pointer", fontSize: isMobile ? 16 : 13, color: "#a32d2d", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" },
     voteCount: { fontSize: 15, fontWeight: 700, color: "var(--text)" },
     dealBody: { flex: 1 },
     titleRow: { display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap", marginBottom: 4 },
@@ -378,20 +389,20 @@ export default function MealDeals() {
     commentTime: { fontSize: 11, color: "var(--text-faint)", marginLeft: 6 },
     commentText: { fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5, marginTop: 3 },
     inputRow: { display: "flex", gap: 8, marginTop: 10 },
-    input: { flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 13, fontFamily: "inherit", outline: "none" },
+    input: { flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: isMobile ? 16 : 13, fontFamily: "inherit", outline: "none" },
     btn: { padding: "8px 16px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", fontSize: 13, color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit" },
     btnPrimary: { padding: "10px 20px", borderRadius: 10, border: "none", background: "var(--accent)", fontSize: 14, color: "#fff", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 },
     searchBar: { display: "flex", alignItems: "center", gap: 10, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 16px", marginBottom: 16 },
-    searchInput: { flex: 1, border: "none", background: "transparent", fontSize: 15, color: "var(--text)", fontFamily: "inherit", outline: "none" },
+    searchInput: { flex: 1, border: "none", background: "transparent", fontSize: isMobile ? 16 : 15, color: "var(--text)", fontFamily: "inherit", outline: "none" },
     formCard: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "20px", marginBottom: 14 },
     sectionLabel: { fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 },
     field: { marginBottom: 14 },
     label: { display: "block", fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 6 },
-    textInput: { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" },
-    textarea: { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", height: 90, resize: "none", lineHeight: 1.5 },
-    row2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
-    dayChip: { width: 38, height: 38, borderRadius: "50%", border: "1px solid var(--border)", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--surface-2)" },
-    dayChipActive: { width: 38, height: 38, borderRadius: "50%", border: "1px solid var(--accent)", fontSize: 12, fontWeight: 700, color: "var(--accent-dark)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--accent-light)" },
+    textInput: { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: isMobile ? 16 : 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" },
+    textarea: { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: isMobile ? 16 : 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", height: 90, resize: "none", lineHeight: 1.5 },
+    row2: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 },
+    dayChip: { width: isMobile ? 44 : 38, height: isMobile ? 44 : 38, borderRadius: "50%", border: "1px solid var(--border)", fontSize: isMobile ? 13 : 12, fontWeight: 600, color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--surface-2)" },
+    dayChipActive: { width: isMobile ? 44 : 38, height: isMobile ? 44 : 38, borderRadius: "50%", border: "1px solid var(--accent)", fontSize: isMobile ? 13 : 12, fontWeight: 700, color: "var(--accent-dark)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--accent-light)" },
     includeItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)", cursor: "pointer" },
     successBanner: { background: "#eaf3de", border: "1px solid #97c459", color: "#3b6d11", borderRadius: 12, padding: "16px 20px", textAlign: "center", fontSize: 15, fontWeight: 700, marginBottom: 16 },
     backBtn: { display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-muted)", cursor: "pointer", marginBottom: 16, background: "none", border: "none", fontFamily: "inherit", padding: 0 },
@@ -438,17 +449,17 @@ export default function MealDeals() {
           <button style={screen === "map" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("map")}>Map</button>
           {user ? (
             <>
-              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>u/{username(user)}</span>
+              {!isMobile && <span style={{ fontSize: 13, color: "var(--text-muted)" }}>u/{username(user)}</span>}
               {role === "moderator" && <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "var(--accent)", borderRadius: 20, padding: "2px 8px" }}>MOD</span>}
-              <button style={styles.navBtn} onClick={() => supabase.auth.signOut()}>Log out</button>
+              <button style={styles.navBtn} onClick={() => supabase.auth.signOut()}>{isMobile ? "Out" : "Log out"}</button>
             </>
           ) : (
             <>
-              <button style={styles.navBtn} onClick={() => setAuthModal("login")}>Log in</button>
-              <button style={styles.navBtn} onClick={() => setAuthModal("signup")}>Sign up</button>
+              <button style={styles.navBtn} onClick={() => setAuthModal("login")}>{isMobile ? "Log in" : "Log in"}</button>
+              {!isMobile && <button style={styles.navBtn} onClick={() => setAuthModal("signup")}>Sign up</button>}
             </>
           )}
-          <button style={styles.navBtnActive} onClick={() => user ? setScreen("post") : setAuthModal("login")}>+ Post a deal</button>
+          <button style={styles.navBtnActive} onClick={() => user ? setScreen("post") : setAuthModal("login")}>{isMobile ? "+ Post" : "+ Post a deal"}</button>
         </div>
       </div>
 
