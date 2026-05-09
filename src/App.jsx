@@ -76,6 +76,7 @@ export default function MealDeals() {
   const [mealFilter, setMealFilter] = useState("All");
   const [dayFilter, setDayFilter] = useState([DAYS_SHORT[new Date().getDay()]]);
   const [sortBy, setSortBy] = useState("top");
+  const [savedDealIds, setSavedDealIds] = useState(new Set());
 
   const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
@@ -101,19 +102,42 @@ export default function MealDeals() {
     setRole(data?.role ?? "user");
   };
 
+  const fetchSaved = async (userId) => {
+    if (!userId) { setSavedDealIds(new Set()); return; }
+    const { data } = await supabase.from("saved_deals").select("deal_id").eq("user_id", userId);
+    setSavedDealIds(new Set((data || []).map(r => r.deal_id)));
+  };
+
   useEffect(() => {
     fetchDeals();
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       fetchRole(session?.user?.id ?? null);
+      fetchSaved(session?.user?.id ?? null);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       fetchRole(session?.user?.id ?? null);
+      fetchSaved(session?.user?.id ?? null);
       if (event === "PASSWORD_RECOVERY") setResetPassword(true);
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  const toggleSaveDeal = async (dealId) => {
+    if (!user) { setAuthModal("login"); return; }
+    const isSaved = savedDealIds.has(dealId);
+    const next = new Set(savedDealIds);
+    if (isSaved) next.delete(dealId); else next.add(dealId);
+    setSavedDealIds(next);
+    if (isSaved) {
+      const { error } = await supabase.from("saved_deals").delete().eq("user_id", user.id).eq("deal_id", dealId);
+      if (error) { setSavedDealIds(savedDealIds); }
+    } else {
+      const { error } = await supabase.from("saved_deals").insert({ user_id: user.id, deal_id: dealId });
+      if (error) { setSavedDealIds(savedDealIds); }
+    }
+  };
 
   const fetchDeals = async () => {
     setLoading(true);
@@ -456,6 +480,7 @@ export default function MealDeals() {
         <div style={styles.logo} onClick={() => setScreen("home")}>MealDeals</div>
         <div style={styles.navRight}>
           <button style={screen === "map" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("map")}>Map</button>
+          {user && <button style={screen === "saved" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("saved")}>{isMobile ? "★" : "★ Saved"}</button>}
           {user ? (
             <>
               {!isMobile && <span style={{ fontSize: 13, color: "var(--text-muted)" }}>u/{username(user)}</span>}
@@ -523,7 +548,9 @@ export default function MealDeals() {
             <DealCard key={deal.id} deal={deal} styles={styles} votedDeals={votedDeals}
               onVote={handleVote} onClick={() => { setSelectedDeal(deal.id); setScreen("deal"); }}
               canDelete={role === "moderator" || deal.user_id === user?.id}
-              onDelete={handleDeleteDeal} />
+              onDelete={handleDeleteDeal}
+              isSaved={savedDealIds.has(deal.id)}
+              onToggleSave={toggleSaveDeal} />
           ))}
         </div>
       )}
@@ -534,6 +561,29 @@ export default function MealDeals() {
           deals={deals}
           onDealClick={(id) => { setSelectedDeal(id); setScreen("deal"); }}
         />
+      )}
+
+      {/* SAVED */}
+      {screen === "saved" && (
+        <div style={styles.page}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", marginBottom: 16 }}>★ Saved deals</div>
+          {deals.filter(d => savedDealIds.has(d.id)).length === 0 ? (
+            <div style={styles.emptyState}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>★</div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No saved deals yet</div>
+              <div style={{ fontSize: 13 }}>Tap the star on any deal to save it for later.</div>
+            </div>
+          ) : (
+            deals.filter(d => savedDealIds.has(d.id)).map(deal => (
+              <DealCard key={deal.id} deal={deal} styles={styles} votedDeals={votedDeals}
+                onVote={handleVote} onClick={() => { setSelectedDeal(deal.id); setScreen("deal"); }}
+                canDelete={role === "moderator" || deal.user_id === user?.id}
+                onDelete={handleDeleteDeal}
+                isSaved={savedDealIds.has(deal.id)}
+                onToggleSave={toggleSaveDeal} />
+            ))
+          )}
+        </div>
       )}
 
       {/* DEAL DETAIL */}
@@ -571,7 +621,12 @@ export default function MealDeals() {
               </div>
               <div style={styles.dealBody}>
                 <div style={styles.titleRow}>
-                  <div style={{ ...styles.dealTitle, fontSize: 17 }}>{openDeal.title}</div>
+                  <div style={{ ...styles.dealTitle, fontSize: 17, flex: 1 }}>{openDeal.title}</div>
+                  <span onClick={() => toggleSaveDeal(openDeal.id)}
+                    title={savedDealIds.has(openDeal.id) ? "Unsave" : "Save"}
+                    style={{ fontSize: 22, cursor: "pointer", flexShrink: 0, color: savedDealIds.has(openDeal.id) ? "var(--accent)" : "var(--text-faint)", lineHeight: 1 }}>
+                    {savedDealIds.has(openDeal.id) ? "★" : "☆"}
+                  </span>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                   {openDeal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden", border: "1px solid #000" }}>{openDeal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
@@ -1086,7 +1141,7 @@ function CommentNode({ node, dealId, user, role, replyingTo, setReplyingTo, repl
   );
 }
 
-function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDelete }) {
+function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDelete, isSaved, onToggleSave }) {
   const [showComments, setShowComments] = useState(false);
   return (
     <div style={styles.card} onClick={onClick}>
@@ -1101,9 +1156,14 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
             <span style={styles.dealTitle}>{deal.title}</span>
             {deal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden", border: "1px solid #000" }}>{deal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
             <span style={styles.priceBadge}>{deal.price}</span>
+            <span onClick={e => { e.stopPropagation(); onToggleSave(deal.id); }}
+              title={isSaved ? "Unsave" : "Save"}
+              style={{ marginLeft: "auto", fontSize: 18, cursor: "pointer", flexShrink: 0, color: isSaved ? "var(--accent)" : "var(--text-faint)", lineHeight: 1 }}>
+              {isSaved ? "★" : "☆"}
+            </span>
             {canDelete && (
               <span onClick={e => { e.stopPropagation(); onDelete(deal.id); }}
-                style={{ marginLeft: "auto", fontSize: 12, color: "#e24b4a", cursor: "pointer", flexShrink: 0 }}>Delete</span>
+                style={{ fontSize: 12, color: "#e24b4a", cursor: "pointer", flexShrink: 0 }}>Delete</span>
             )}
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
