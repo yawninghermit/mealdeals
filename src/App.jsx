@@ -435,7 +435,6 @@ export default function MealDeals() {
       <div style={styles.nav}>
         <div style={styles.logo} onClick={() => setScreen("home")}>MealDeals</div>
         <div style={styles.navRight}>
-          <button style={screen === "explore" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("explore")}>Explore</button>
           <button style={screen === "map" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("map")}>Map</button>
           {user ? (
             <>
@@ -499,58 +498,6 @@ export default function MealDeals() {
               canDelete={role === "moderator" || deal.user_id === user?.id}
               onDelete={handleDeleteDeal} />
           ))}
-        </div>
-      )}
-
-      {/* EXPLORE */}
-      {screen === "explore" && (
-        <div style={styles.page}>
-          <div style={styles.searchBar}>
-            <span style={{ fontSize: 16 }}>🔍</span>
-            <input style={styles.searchInput} placeholder="Search deals, restaurants, dishes..." value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); }} />
-          </div>
-
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10, color: "var(--text)" }}>Trending right now 🔥</div>
-            <div style={styles.filterBar}>
-              {["Meatball Monday", "$1 slices", "Wing Wednesday", "Happy hour", "Under $8", "Taco Tuesday"].map(t => (
-                <button key={t} style={{ ...styles.chip, background: "var(--accent-light)", border: "1px solid #f0997b", color: "var(--accent-dark)", fontWeight: 600 }}
-                  onClick={() => { setSearchQuery(t); setScreen("home"); }}>{t}</button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "var(--text)" }}>Browse by meal time</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 24 }}>
-            {[["🌅","Breakfast"],["☀️","Lunch"],["🌙","Dinner"]].map(([icon,name]) => (
-              <div key={name} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 8px", textAlign: "center", cursor: "pointer" }}
-                onClick={() => { setMealFilter(name); setScreen("home"); }}>
-                <div style={{ fontSize: 24, marginBottom: 6 }}>{icon}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{name}</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: "var(--text)" }}>Top deals</div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>Sorted by votes</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {deals.slice(0,4).map(d => (
-              <div key={d.id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, cursor: "pointer" }}
-                onClick={() => { setSelectedDeal(d.id); setScreen("deal"); }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, gap: 6 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", lineHeight: 1.3, flex: 1 }}>{d.title}</div>
-                  <div style={{ ...styles.priceBadge, flexShrink: 0 }}>{d.price}</div>
-                </div>
-                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>{d.restaurant}</div>
-                <div style={{ display: "flex", gap: 8, fontSize: 11, color: "var(--text-faint)", alignItems: "center" }}>
-                  <span style={{ color: "var(--accent)", fontWeight: 700 }}>▲ {d.votes}</span>
-                  <span>{d.distance}</span>
-                  <span>{d.hours}</span>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
