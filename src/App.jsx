@@ -565,7 +565,7 @@ export default function MealDeals() {
                   {openDeal.verified && <span style={styles.verified}>✓ Verified</span>}
                 </div>
                 {openDeal.imageUrl && (
-                  <img src={openDeal.imageUrl} alt={openDeal.title} style={{ width: "100%", maxHeight: 360, objectFit: "contain", borderRadius: 10, marginBottom: 12, display: "block" }} />
+                  <img src={openDeal.imageUrl} alt={openDeal.title} style={{ maxWidth: "100%", maxHeight: 320, height: "auto", borderRadius: 10, marginBottom: 12, display: "block" }} />
                 )}
                 <div style={{ fontSize: 15, color: "var(--text)", marginBottom: 12, lineHeight: 1.6 }}>{openDeal.description}</div>
                 <div style={styles.metaRow}>
@@ -1098,7 +1098,7 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
           </div>
           <div style={styles.desc}>{deal.description}</div>
           {deal.imageUrl && (
-            <img src={deal.imageUrl} alt={deal.title} style={{ width: "100%", maxHeight: 200, objectFit: "contain", borderRadius: 8, marginBottom: 8, display: "block" }} />
+            <img src={deal.imageUrl} alt={deal.title} style={{ maxWidth: "100%", maxHeight: 160, height: "auto", borderRadius: 8, marginBottom: 8, display: "block" }} />
           )}
           <div style={styles.metaRow}>
             <span onClick={e => { e.stopPropagation(); setShowComments(s => !s); }} style={styles.commentToggle}>
