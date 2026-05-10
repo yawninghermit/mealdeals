@@ -16,7 +16,10 @@ const mapDeal = (d) => ({
   comments: (d.comments || []).map(c => ({ ...c, user: c.username, votes: 0 })),
 });
 
-const username = (user) => user?.email?.split("@")[0] ?? "anonymous";
+const emailPrefix = (user) => user?.email?.split("@")[0] ?? "anonymous";
+const username = emailPrefix;
+const nameFor = (userId, profilesById, fallback) =>
+  profilesById?.[userId]?.display_name || fallback || "anonymous";
 
 const useIsMobile = (breakpoint = 640) => {
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < breakpoint);
@@ -67,8 +70,11 @@ export default function MealDeals() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
+  const [profile, setProfile] = useState(null); // { id, display_name, avatar_url, role }
+  const [profilesById, setProfilesById] = useState({}); // cache for live name/avatar lookups
   const [authModal, setAuthModal] = useState(null); // "login" | "signup" | "forgot" | null
   const [resetPassword, setResetPassword] = useState(false);
+  const [myComments, setMyComments] = useState([]);
   const [votedDeals, setVotedDeals] = useState(() => {
     try { return JSON.parse(localStorage.getItem("votedDeals") || "{}"); }
     catch { return {}; }
@@ -91,15 +97,81 @@ export default function MealDeals() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState(null);
   const imageInputRef = useRef(null);
+  const avatarInputRef = useRef(null);
+  const [displayNameDraft, setDisplayNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState(null);
+  const [nameSaved, setNameSaved] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState(null);
+  const [pwSending, setPwSending] = useState(false);
+  const [pwSent, setPwSent] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [postSuccess, setPostSuccess] = useState(false);
   const [postError, setPostError] = useState("");
   const [editingDealId, setEditingDealId] = useState(null);
 
-  const fetchRole = async (userId) => {
-    if (!userId) { setRole(null); return; }
-    const { data } = await supabase.from("profiles").select("role").eq("id", userId).single();
-    setRole(data?.role ?? "user");
+  const fetchProfile = async (userId) => {
+    if (!userId) { setRole(null); setProfile(null); return; }
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("id, role, display_name, avatar_url")
+      .eq("id", userId)
+      .maybeSingle();
+
+    let row = existing;
+    if (!row) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const initial = authUser?.user_metadata?.display_name?.trim() || authUser?.email?.split("@")[0] || null;
+      const { data: created } = await supabase
+        .from("profiles")
+        .insert({ id: userId, display_name: initial })
+        .select("id, role, display_name, avatar_url")
+        .single();
+      row = created;
+    } else if (!row.display_name) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const metaName = authUser?.user_metadata?.display_name?.trim();
+      if (metaName) {
+        await supabase.from("profiles").update({ display_name: metaName }).eq("id", userId);
+        row.display_name = metaName;
+      }
+    }
+
+    setProfile(row);
+    setRole(row?.role ?? "user");
+    if (row) {
+      setProfilesById(prev => ({
+        ...prev,
+        [row.id]: { display_name: row.display_name, avatar_url: row.avatar_url }
+      }));
+    }
+  };
+
+  const fetchProfilesForIds = async (userIds) => {
+    const ids = [...new Set((userIds || []).filter(Boolean))];
+    if (ids.length === 0) return;
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, display_name, avatar_url")
+      .in("id", ids);
+    if (data) {
+      setProfilesById(prev => {
+        const next = { ...prev };
+        data.forEach(p => { next[p.id] = { display_name: p.display_name, avatar_url: p.avatar_url }; });
+        return next;
+      });
+    }
+  };
+
+  const fetchMyComments = async (userId) => {
+    if (!userId) { setMyComments([]); return; }
+    const { data } = await supabase
+      .from("comments")
+      .select("id, text, created_at, deal_id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    setMyComments(data || []);
   };
 
   const fetchSaved = async (userId) => {
@@ -112,17 +184,25 @@ export default function MealDeals() {
     fetchDeals();
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      fetchRole(session?.user?.id ?? null);
+      fetchProfile(session?.user?.id ?? null);
       fetchSaved(session?.user?.id ?? null);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
-      fetchRole(session?.user?.id ?? null);
+      fetchProfile(session?.user?.id ?? null);
       fetchSaved(session?.user?.id ?? null);
       if (event === "PASSWORD_RECOVERY") setResetPassword(true);
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (screen === "profile" && profile) {
+      setDisplayNameDraft(profile.display_name || "");
+      setNameError(null);
+      setAvatarError(null);
+    }
+  }, [screen, profile?.display_name]);
 
   const toggleSaveDeal = async (dealId) => {
     if (!user) { setAuthModal("login"); return; }
@@ -139,13 +219,60 @@ export default function MealDeals() {
     }
   };
 
+  const handleSaveDisplayName = async () => {
+    const name = displayNameDraft.trim();
+    setNameError(null);
+    setNameSaved(false);
+    if (name.length < 2 || name.length > 30) { setNameError("Display name must be 2-30 characters."); return; }
+    setSavingName(true);
+    const { error } = await supabase.from("profiles").update({ display_name: name }).eq("id", user.id);
+    setSavingName(false);
+    if (error) { setNameError(error.message); return; }
+    setProfile(p => p ? { ...p, display_name: name } : p);
+    setProfilesById(prev => ({ ...prev, [user.id]: { ...(prev[user.id] || {}), display_name: name } }));
+    setNameSaved(true);
+    setTimeout(() => setNameSaved(false), 2000);
+  };
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = "";
+    if (!file || !user) return;
+    setAvatarError(null);
+    if (file.size > 2 * 1024 * 1024) { setAvatarError("Image must be under 2 MB."); return; }
+    setUploadingAvatar(true);
+    const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+    const path = `${user.id}/avatar.${ext}`;
+    const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
+    if (upErr) { setAvatarError(upErr.message); setUploadingAvatar(false); return; }
+    const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
+    const url = `${pub.publicUrl}?t=${Date.now()}`;
+    const { error: updErr } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id);
+    setUploadingAvatar(false);
+    if (updErr) { setAvatarError(updErr.message); return; }
+    setProfile(p => p ? { ...p, avatar_url: url } : p);
+    setProfilesById(prev => ({ ...prev, [user.id]: { ...(prev[user.id] || {}), avatar_url: url } }));
+  };
+
+  const handleSendPasswordReset = async () => {
+    if (!user) return;
+    setPwSending(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, { redirectTo: window.location.origin });
+    setPwSending(false);
+    if (!error) { setPwSent(true); setTimeout(() => setPwSent(false), 4000); }
+  };
+
   const fetchDeals = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("deals")
       .select("*, comments(*)")
       .order("votes", { ascending: false });
-    if (!error && data) setDeals(data.map(mapDeal));
+    if (!error && data) {
+      setDeals(data.map(mapDeal));
+      const ids = data.flatMap(d => [d.user_id, ...(d.comments || []).map(c => c.user_id)]);
+      fetchProfilesForIds(ids);
+    }
     setLoading(false);
   };
 
@@ -194,7 +321,7 @@ export default function MealDeals() {
     if (parentId) { setReplyText(""); setReplyingTo(null); } else setNewComment("");
     const { data, error } = await supabase
       .from("comments")
-      .insert({ deal_id: dealId, username: username(user), text, user_id: user.id, parent_id: parentId })
+      .insert({ deal_id: dealId, username: profile?.display_name || username(user), text, user_id: user.id, parent_id: parentId })
       .select()
       .single();
     if (!error && data) {
@@ -481,9 +608,17 @@ export default function MealDeals() {
         <div style={styles.navRight}>
           <button style={screen === "map" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("map")}>Map</button>
           {user && <button style={screen === "saved" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("saved")}>{isMobile ? "★" : "★ Saved"}</button>}
+          {user && (
+            <button
+              style={screen === "profile" ? styles.navBtnActive : styles.navBtn}
+              onClick={() => { setScreen("profile"); fetchMyComments(user.id); }}
+              title="Profile"
+            >
+              {isMobile ? "👤" : `u/${profile?.display_name || emailPrefix(user)}`}
+            </button>
+          )}
           {user ? (
             <>
-              {!isMobile && <span style={{ fontSize: 13, color: "var(--text-muted)" }}>u/{username(user)}</span>}
               {role === "moderator" && <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "var(--accent)", borderRadius: 20, padding: "2px 8px" }}>MOD</span>}
               <button style={styles.navBtn} onClick={() => supabase.auth.signOut()}>{isMobile ? "Out" : "Log out"}</button>
             </>
@@ -586,6 +721,130 @@ export default function MealDeals() {
         </div>
       )}
 
+      {/* PROFILE */}
+      {screen === "profile" && user && (
+        <div style={styles.page}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", marginBottom: 16 }}>Profile</div>
+
+          {/* Avatar + change */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="avatar" style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover" }} />
+            ) : (
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: avatarColor(profile?.display_name || emailPrefix(user)), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: "#fff" }}>
+                {((profile?.display_name || emailPrefix(user))[0] || "?").toUpperCase()}
+              </div>
+            )}
+            <div>
+              <button style={styles.btn} onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
+                {uploadingAvatar ? "Uploading..." : profile?.avatar_url ? "Change picture" : "Upload picture"}
+              </button>
+              <input type="file" accept="image/*" ref={avatarInputRef} style={{ display: "none" }} onChange={handleAvatarUpload} />
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>PNG/JPG, under 2 MB.</div>
+              {avatarError && <div style={{ fontSize: 12, color: "#e24b4a", marginTop: 4 }}>{avatarError}</div>}
+            </div>
+          </div>
+
+          {/* Email */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 4 }}>Email</div>
+            <div style={{ fontSize: 14, color: "var(--text)" }}>{user.email}</div>
+          </div>
+
+          {/* Display name */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 4 }}>Display name</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                style={{ ...styles.input, flex: 1 }}
+                value={displayNameDraft}
+                onChange={e => setDisplayNameDraft(e.target.value)}
+                maxLength={30}
+                placeholder="Your display name"
+              />
+              <button style={styles.btnPrimary} onClick={handleSaveDisplayName} disabled={savingName || displayNameDraft.trim() === (profile?.display_name || "")}>
+                {savingName ? "..." : "Save"}
+              </button>
+            </div>
+            {nameError && <div style={{ fontSize: 12, color: "#e24b4a", marginTop: 4 }}>{nameError}</div>}
+            {nameSaved && <div style={{ fontSize: 12, color: "#3aa86b", marginTop: 4 }}>Saved.</div>}
+          </div>
+
+          {/* Change password */}
+          <div style={{ marginBottom: 28 }}>
+            <button style={styles.btn} onClick={handleSendPasswordReset} disabled={pwSending || pwSent}>
+              {pwSending ? "Sending..." : pwSent ? "Email sent ✓" : "Send password reset email"}
+            </button>
+            <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>We'll email you a link to set a new password.</div>
+          </div>
+
+          {/* Saved deals */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>★ Saved deals ({deals.filter(d => savedDealIds.has(d.id)).length})</div>
+            {deals.filter(d => savedDealIds.has(d.id)).length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--text-faint)" }}>Tap the star on any deal to save it.</div>
+            ) : (
+              deals.filter(d => savedDealIds.has(d.id)).map(deal => (
+                <DealCard key={deal.id} deal={deal} styles={styles} votedDeals={votedDeals}
+                  onVote={handleVote} onClick={() => { setSelectedDeal(deal.id); setScreen("deal"); }}
+                  canDelete={role === "moderator" || deal.user_id === user?.id}
+                  onDelete={handleDeleteDeal}
+                  isSaved={savedDealIds.has(deal.id)}
+                  onToggleSave={toggleSaveDeal} />
+              ))
+            )}
+          </div>
+
+          {/* Liked deals (local) */}
+          {(() => {
+            const likedIds = Object.keys(votedDeals).filter(k => k.endsWith("-up") && votedDeals[k]).map(k => k.replace("-up", ""));
+            const likedDeals = deals.filter(d => likedIds.includes(String(d.id)));
+            return (
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>👍 Liked deals ({likedDeals.length})</div>
+                <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 10 }}>Tracked locally on this device.</div>
+                {likedDeals.length === 0 ? (
+                  <div style={{ fontSize: 13, color: "var(--text-faint)" }}>No upvotes yet.</div>
+                ) : (
+                  likedDeals.map(deal => (
+                    <DealCard key={deal.id} deal={deal} styles={styles} votedDeals={votedDeals}
+                      onVote={handleVote} onClick={() => { setSelectedDeal(deal.id); setScreen("deal"); }}
+                      canDelete={role === "moderator" || deal.user_id === user?.id}
+                      onDelete={handleDeleteDeal}
+                      isSaved={savedDealIds.has(deal.id)}
+                      onToggleSave={toggleSaveDeal} />
+                  ))
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Comment history */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>💬 Your comments ({myComments.length})</div>
+            {myComments.length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--text-faint)" }}>You haven't commented yet.</div>
+            ) : (
+              myComments.map(c => {
+                const dealTitle = deals.find(d => d.id === c.deal_id)?.title || "(deal removed)";
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => { setSelectedDeal(c.deal_id); setScreen("deal"); }}
+                    style={{ borderTop: "1px solid var(--border)", padding: "10px 0", cursor: "pointer" }}
+                  >
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                      on <span style={{ color: "var(--accent)" }}>{dealTitle}</span> · {timeAgo(c.created_at)}
+                    </div>
+                    <div style={{ fontSize: 14, color: "var(--text)" }}>{c.text}</div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
       {/* DEAL DETAIL */}
       {screen === "deal" && openDeal && (
         <div style={styles.page}>
@@ -668,7 +927,7 @@ export default function MealDeals() {
               </div>
               {buildTree(openDeal.comments).map(node => (
                 <CommentNode key={node.id} node={node} dealId={openDeal.id}
-                  user={user} role={role}
+                  user={user} role={role} profilesById={profilesById}
                   replyingTo={replyingTo} setReplyingTo={setReplyingTo}
                   replyText={replyText} setReplyText={setReplyText}
                   onComment={handleComment} onDelete={handleDeleteComment} styles={styles} />
@@ -819,6 +1078,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [captchaToken, setCaptchaToken] = useState(null);
@@ -864,11 +1124,18 @@ function AuthModal({ mode, onClose, onSwitch }) {
 
   const handleSubmit = async () => {
     if (!captchaToken) { setError("Please complete the CAPTCHA."); return; }
-    if (mode === "signup" && password !== confirmPassword) { setError("Passwords do not match."); return; }
+    if (mode === "signup") {
+      const trimmedName = displayName.trim();
+      if (trimmedName.length < 2 || trimmedName.length > 30) { setError("Display name must be 2-30 characters."); return; }
+      if (password !== confirmPassword) { setError("Passwords do not match."); return; }
+    }
     setError("");
     setLoading(true);
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password, options: { captchaToken } });
+      const { error } = await supabase.auth.signUp({
+        email, password,
+        options: { captchaToken, data: { display_name: displayName.trim() } }
+      });
       if (error) { setError(error.message); resetCaptcha(); }
       else onClose();
     } else {
@@ -893,6 +1160,9 @@ function AuthModal({ mode, onClose, onSwitch }) {
         <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>
           {mode === "signup" ? "Sign up to post deals and leave comments." : "Log in to your account."}
         </div>
+        {mode === "signup" && (
+          <input style={inputStyle} type="text" placeholder="Display name" value={displayName} onChange={e => setDisplayName(e.target.value)} maxLength={30} />
+        )}
         <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
         <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
           onKeyDown={e => e.key === "Enter" && mode === "login" && captchaToken && handleSubmit()} />
@@ -1054,7 +1324,9 @@ function ResetPasswordModal({ onClose }) {
   );
 }
 
-function CommentNode({ node, dealId, user, role, replyingTo, setReplyingTo, replyText, setReplyText, onComment, onDelete, styles }) {
+function CommentNode({ node, dealId, user, role, profilesById, replyingTo, setReplyingTo, replyText, setReplyText, onComment, onDelete, styles }) {
+  const authorName = nameFor(node.user_id, profilesById, node.user);
+  const authorAvatar = profilesById?.[node.user_id]?.avatar_url;
   const [collapsed, setCollapsed] = useState(false);
   const totalReplies = (n) => n.replies.reduce((acc, r) => acc + 1 + totalReplies(r), 0);
   const replyCount = totalReplies(node);
@@ -1063,9 +1335,13 @@ function CommentNode({ node, dealId, user, role, replyingTo, setReplyingTo, repl
     <div style={{ display: "flex", gap: 0, marginBottom: 2 }}>
       {/* Left column: avatar + collapse line */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 36, flexShrink: 0 }}>
-        <div style={{ ...styles.commentAvatar, background: avatarColor(node.user), width: 28, height: 28, fontSize: 12, flexShrink: 0 }}>
-          {(node.user || "?")[0].toUpperCase()}
-        </div>
+        {authorAvatar ? (
+          <img src={authorAvatar} alt={authorName} style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+        ) : (
+          <div style={{ ...styles.commentAvatar, background: avatarColor(authorName), width: 28, height: 28, fontSize: 12, flexShrink: 0 }}>
+            {(authorName || "?")[0].toUpperCase()}
+          </div>
+        )}
         {!collapsed && (
           <div
             style={{ width: 2, flex: 1, minHeight: 8, background: "var(--border)", marginTop: 4, cursor: "pointer", borderRadius: 1, transition: "background 0.15s" }}
@@ -1080,7 +1356,7 @@ function CommentNode({ node, dealId, user, role, replyingTo, setReplyingTo, repl
       <div style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
         {/* Header row */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: collapsed ? 0 : 3 }}>
-          <span style={styles.commentUser}>{node.user}</span>
+          <span style={styles.commentUser}>{authorName}</span>
           <span style={styles.commentTime}>{timeAgo(node.created_at)}</span>
           {collapsed && (
             <span onClick={() => setCollapsed(false)}
@@ -1115,7 +1391,7 @@ function CommentNode({ node, dealId, user, role, replyingTo, setReplyingTo, repl
               <div style={{ marginBottom: 12 }}>
                 <textarea
                   style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", resize: "none", height: 72, lineHeight: 1.5, marginBottom: 8, display: "block" }}
-                  placeholder={`Reply to ${node.user}...`}
+                  placeholder={`Reply to ${authorName}...`}
                   value={replyText}
                   onChange={e => setReplyText(e.target.value)}
                   autoFocus
@@ -1129,7 +1405,7 @@ function CommentNode({ node, dealId, user, role, replyingTo, setReplyingTo, repl
 
             {/* Nested replies */}
             {node.replies.map(r => (
-              <CommentNode key={r.id} node={r} dealId={dealId} user={user} role={role}
+              <CommentNode key={r.id} node={r} dealId={dealId} user={user} role={role} profilesById={profilesById}
                 replyingTo={replyingTo} setReplyingTo={setReplyingTo}
                 replyText={replyText} setReplyText={setReplyText}
                 onComment={onComment} onDelete={onDelete} styles={styles} />
