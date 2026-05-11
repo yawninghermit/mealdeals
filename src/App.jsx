@@ -234,16 +234,43 @@ export default function MealDeals() {
     setTimeout(() => setNameSaved(false), 2000);
   };
 
+  const downscaleAvatar = (file, maxDim = 512, quality = 0.9) => new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("toBlob failed")), "image/jpeg", quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image decode failed")); };
+    img.src = url;
+  });
+
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
     if (e.target) e.target.value = "";
     if (!file || !user) return;
     setAvatarError(null);
-    if (file.size > 2 * 1024 * 1024) { setAvatarError("Image must be under 2 MB."); return; }
     setUploadingAvatar(true);
-    const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+    let blob, ext, contentType;
+    try {
+      blob = await downscaleAvatar(file);
+      ext = "jpg";
+      contentType = "image/jpeg";
+    } catch {
+      if (file.size > 5 * 1024 * 1024) { setAvatarError("Image must be under 5 MB."); setUploadingAvatar(false); return; }
+      blob = file;
+      ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+      contentType = file.type || "image/png";
+    }
     const path = `${user.id}/avatar.${ext}`;
-    const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
+    const { error: upErr } = await supabase.storage.from("avatars").upload(path, blob, { upsert: true, contentType });
     if (upErr) { setAvatarError(upErr.message); setUploadingAvatar(false); return; }
     const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
     const url = `${pub.publicUrl}?t=${Date.now()}`;
@@ -740,7 +767,7 @@ export default function MealDeals() {
                 {uploadingAvatar ? "Uploading..." : profile?.avatar_url ? "Change picture" : "Upload picture"}
               </button>
               <input type="file" accept="image/*" ref={avatarInputRef} style={{ display: "none" }} onChange={handleAvatarUpload} />
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>PNG/JPG, under 2 MB.</div>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>PNG/JPG. Large images are resized automatically.</div>
               {avatarError && <div style={{ fontSize: 12, color: "#e24b4a", marginTop: 4 }}>{avatarError}</div>}
             </div>
           </div>
