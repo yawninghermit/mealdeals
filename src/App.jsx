@@ -121,6 +121,7 @@ export default function MealDeals() {
   const [pendingReports, setPendingReports] = useState([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [pendingReportCount, setPendingReportCount] = useState(0);
+  const [reportsFilter, setReportsFilter] = useState("pending"); // pending | reviewed | all
 
   const fetchProfile = async (userId) => {
     if (!userId) { setRole(null); setProfile(null); return; }
@@ -336,39 +337,51 @@ export default function MealDeals() {
     if (role === "moderator") setPendingReportCount(c => c + 1);
   };
 
-  const fetchReports = async () => {
+  const fetchReports = async (filter = reportsFilter) => {
     if (role !== "moderator") return;
     setReportsLoading(true);
-    const { data: reports } = await supabase.from("reports")
-      .select("*").eq("status", "pending").order("created_at", { ascending: false });
+    let q = supabase.from("reports").select("*").order("created_at", { ascending: false });
+    if (filter === "pending") q = q.eq("status", "pending");
+    else if (filter === "reviewed") q = q.neq("status", "pending");
+    const { data: reports } = await q;
     const list = reports || [];
     const dealIds = [...new Set(list.filter(r => r.target_type === "deal").map(r => r.target_id))];
     const commentIds = [...new Set(list.filter(r => r.target_type === "comment").map(r => r.target_id))];
-    const reporterIds = [...new Set(list.map(r => r.reporter_id))];
-    const [deals, comments, reporters] = await Promise.all([
+    const profileIds = [...new Set(list.flatMap(r => [r.reporter_id, r.reviewed_by]).filter(Boolean))];
+    const [deals, comments, profiles] = await Promise.all([
       dealIds.length ? supabase.from("deals").select("id, title, user_id").in("id", dealIds) : Promise.resolve({ data: [] }),
       commentIds.length ? supabase.from("comments").select("id, text, user_id, deal_id").in("id", commentIds) : Promise.resolve({ data: [] }),
-      reporterIds.length ? supabase.from("profiles").select("id, display_name").in("id", reporterIds) : Promise.resolve({ data: [] }),
+      profileIds.length ? supabase.from("profiles").select("id, display_name").in("id", profileIds) : Promise.resolve({ data: [] }),
     ]);
     const dealMap = Object.fromEntries((deals.data || []).map(d => [d.id, d]));
     const commentMap = Object.fromEntries((comments.data || []).map(c => [c.id, c]));
-    const reporterMap = Object.fromEntries((reporters.data || []).map(p => [p.id, p]));
+    const profileMap = Object.fromEntries((profiles.data || []).map(p => [p.id, p]));
     setPendingReports(list.map(r => ({
       ...r,
       target: r.target_type === "deal" ? dealMap[r.target_id] : commentMap[r.target_id],
-      reporter: reporterMap[r.reporter_id],
+      reporter: profileMap[r.reporter_id],
+      reviewer: r.reviewed_by ? profileMap[r.reviewed_by] : null,
     })));
-    setPendingReportCount(list.length);
+    if (filter === "pending") setPendingReportCount(list.length);
     setReportsLoading(false);
   };
 
   const setReportStatus = async (reportId, status) => {
+    const reviewedAt = new Date().toISOString();
     const { error } = await supabase.from("reports").update({
-      status, reviewed_by: user.id, reviewed_at: new Date().toISOString(),
+      status, reviewed_by: user.id, reviewed_at: reviewedAt,
     }).eq("id", reportId);
     if (error) return;
-    setPendingReports(rs => rs.filter(r => r.id !== reportId));
-    setPendingReportCount(c => Math.max(0, c - 1));
+    const wasPending = pendingReports.find(r => r.id === reportId)?.status === "pending";
+    if (reportsFilter === "pending") {
+      setPendingReports(rs => rs.filter(r => r.id !== reportId));
+    } else {
+      setPendingReports(rs => rs.map(r => r.id === reportId
+        ? { ...r, status, reviewed_by: user.id, reviewed_at: reviewedAt, reviewer: profile ? { id: user.id, display_name: profile.display_name } : r.reviewer }
+        : r));
+    }
+    if (wasPending && status !== "pending") setPendingReportCount(c => Math.max(0, c - 1));
+    if (!wasPending && status === "pending") setPendingReportCount(c => c + 1);
   };
 
   const fetchDeals = async () => {
@@ -1012,18 +1025,36 @@ export default function MealDeals() {
       {/* REPORTS (moderator-only) */}
       {screen === "reports" && role === "moderator" && (
         <div style={styles.page}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>🚩 Pending reports</div>
-            <button style={styles.btn} onClick={fetchReports} disabled={reportsLoading}>{reportsLoading ? "Loading..." : "Refresh"}</button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>🚩 Reports</div>
+            <button style={styles.btn} onClick={() => fetchReports(reportsFilter)} disabled={reportsLoading}>{reportsLoading ? "Loading..." : "Refresh"}</button>
+          </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+            {[{ k: "pending", l: "Pending" }, { k: "reviewed", l: "Reviewed" }, { k: "all", l: "All" }].map(opt => (
+              <button key={opt.k}
+                style={reportsFilter === opt.k ? styles.navBtnActive : styles.navBtn}
+                onClick={() => { setReportsFilter(opt.k); fetchReports(opt.k); }}>
+                {opt.l}
+              </button>
+            ))}
           </div>
           {!reportsLoading && pendingReports.length === 0 && (
-            <div style={{ fontSize: 13, color: "var(--text-faint)", padding: 24, textAlign: "center", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>No pending reports. 🎉</div>
+            <div style={{ fontSize: 13, color: "var(--text-faint)", padding: 24, textAlign: "center", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>
+              {reportsFilter === "pending" ? "No pending reports. 🎉" : "No reports in this view."}
+            </div>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {pendingReports.map(r => (
+            {pendingReports.map(r => {
+              const statusStyle = r.status === "pending"
+                ? { bg: "rgba(226,75,74,0.12)", color: "#a32d2d", label: "PENDING" }
+                : r.status === "actioned"
+                  ? { bg: "rgba(40,160,90,0.15)", color: "#1a6d3d", label: "ACTIONED" }
+                  : { bg: "var(--surface-2)", color: "var(--text-faint)", label: "DISMISSED" };
+              return (
               <div key={r.id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, gap: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: statusStyle.bg, color: statusStyle.color, letterSpacing: 0.4 }}>{statusStyle.label}</span>
                     {r.target_type === "deal" ? "Deal" : "Comment"} · <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>{r.reason}</span>
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text-faint)" }}>{new Date(r.created_at).toLocaleString()}</div>
@@ -1038,6 +1069,9 @@ export default function MealDeals() {
                 {r.note && <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>Note: {r.note}</div>}
                 <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 10 }}>
                   Reported by u/{r.reporter?.display_name || "unknown"}
+                  {r.status !== "pending" && r.reviewed_at && (
+                    <> · {r.status === "actioned" ? "Actioned" : "Dismissed"} by u/{r.reviewer?.display_name || "unknown"} on {new Date(r.reviewed_at).toLocaleString()}</>
+                  )}
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {r.target && r.target_type === "deal" && (
@@ -1046,11 +1080,17 @@ export default function MealDeals() {
                   {r.target && r.target_type === "comment" && r.target.deal_id && (
                     <button style={{ ...styles.btn, fontSize: 12 }} onClick={() => { setSelectedDeal(r.target.deal_id); setScreen("deal"); }}>View thread</button>
                   )}
-                  <button style={{ ...styles.btn, fontSize: 12 }} onClick={() => setReportStatus(r.id, "dismissed")}>Dismiss</button>
-                  <button style={{ ...styles.btn, fontSize: 12, color: "var(--accent)", borderColor: "var(--accent)" }} onClick={() => setReportStatus(r.id, "actioned")}>Mark actioned</button>
+                  {r.status === "pending" ? (
+                    <>
+                      <button style={{ ...styles.btn, fontSize: 12 }} onClick={() => setReportStatus(r.id, "dismissed")}>Dismiss</button>
+                      <button style={{ ...styles.btn, fontSize: 12, color: "var(--accent)", borderColor: "var(--accent)" }} onClick={() => setReportStatus(r.id, "actioned")}>Mark actioned</button>
+                    </>
+                  ) : (
+                    <button style={{ ...styles.btn, fontSize: 12 }} onClick={() => setReportStatus(r.id, "pending")}>Reopen</button>
+                  )}
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         </div>
       )}
