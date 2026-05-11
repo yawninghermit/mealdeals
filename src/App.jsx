@@ -111,6 +111,17 @@ export default function MealDeals() {
   const [postError, setPostError] = useState("");
   const [editingDealId, setEditingDealId] = useState(null);
 
+  // Reporting state
+  const [reportTarget, setReportTarget] = useState(null); // { type: 'deal'|'comment', id, preview }
+  const [reportReason, setReportReason] = useState("inappropriate");
+  const [reportNote, setReportNote] = useState("");
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportError, setReportError] = useState(null);
+  const [reportSuccess, setReportSuccess] = useState(false);
+  const [pendingReports, setPendingReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [pendingReportCount, setPendingReportCount] = useState(0);
+
   const fetchProfile = async (userId) => {
     if (!userId) { setRole(null); setProfile(null); return; }
     const { data: existing } = await supabase
@@ -140,6 +151,12 @@ export default function MealDeals() {
 
     setProfile(row);
     setRole(row?.role ?? "user");
+    if (row?.role === "moderator") {
+      const { count } = await supabase.from("reports").select("id", { count: "exact", head: true }).eq("status", "pending");
+      setPendingReportCount(count || 0);
+    } else {
+      setPendingReportCount(0);
+    }
     if (row) {
       setProfilesById(prev => ({
         ...prev,
@@ -287,6 +304,71 @@ export default function MealDeals() {
     const { error } = await supabase.auth.resetPasswordForEmail(user.email, { redirectTo: window.location.origin });
     setPwSending(false);
     if (!error) { setPwSent(true); setTimeout(() => setPwSent(false), 4000); }
+  };
+
+  const openReport = (type, id, preview) => {
+    if (!user) { setAuthModal("login"); return; }
+    setReportTarget({ type, id, preview });
+    setReportReason("inappropriate");
+    setReportNote("");
+    setReportError(null);
+    setReportSuccess(false);
+  };
+
+  const submitReport = async () => {
+    if (!reportTarget || !user) return;
+    setReportSubmitting(true);
+    setReportError(null);
+    const { error } = await supabase.from("reports").insert({
+      reporter_id: user.id,
+      target_type: reportTarget.type,
+      target_id: reportTarget.id,
+      reason: reportReason,
+      note: reportNote.trim() || null,
+    });
+    setReportSubmitting(false);
+    if (error) {
+      if (error.code === "23505") { setReportSuccess(true); return; }
+      setReportError(error.message);
+      return;
+    }
+    setReportSuccess(true);
+    if (role === "moderator") setPendingReportCount(c => c + 1);
+  };
+
+  const fetchReports = async () => {
+    if (role !== "moderator") return;
+    setReportsLoading(true);
+    const { data: reports } = await supabase.from("reports")
+      .select("*").eq("status", "pending").order("created_at", { ascending: false });
+    const list = reports || [];
+    const dealIds = [...new Set(list.filter(r => r.target_type === "deal").map(r => r.target_id))];
+    const commentIds = [...new Set(list.filter(r => r.target_type === "comment").map(r => r.target_id))];
+    const reporterIds = [...new Set(list.map(r => r.reporter_id))];
+    const [deals, comments, reporters] = await Promise.all([
+      dealIds.length ? supabase.from("deals").select("id, title, user_id").in("id", dealIds) : Promise.resolve({ data: [] }),
+      commentIds.length ? supabase.from("comments").select("id, text, user_id, deal_id").in("id", commentIds) : Promise.resolve({ data: [] }),
+      reporterIds.length ? supabase.from("profiles").select("id, display_name").in("id", reporterIds) : Promise.resolve({ data: [] }),
+    ]);
+    const dealMap = Object.fromEntries((deals.data || []).map(d => [d.id, d]));
+    const commentMap = Object.fromEntries((comments.data || []).map(c => [c.id, c]));
+    const reporterMap = Object.fromEntries((reporters.data || []).map(p => [p.id, p]));
+    setPendingReports(list.map(r => ({
+      ...r,
+      target: r.target_type === "deal" ? dealMap[r.target_id] : commentMap[r.target_id],
+      reporter: reporterMap[r.reporter_id],
+    })));
+    setPendingReportCount(list.length);
+    setReportsLoading(false);
+  };
+
+  const setReportStatus = async (reportId, status) => {
+    const { error } = await supabase.from("reports").update({
+      status, reviewed_by: user.id, reviewed_at: new Date().toISOString(),
+    }).eq("id", reportId);
+    if (error) return;
+    setPendingReports(rs => rs.filter(r => r.id !== reportId));
+    setPendingReportCount(c => Math.max(0, c - 1));
   };
 
   const fetchDeals = async () => {
@@ -629,6 +711,52 @@ export default function MealDeals() {
       {authModal === "forgot" && <ForgotPasswordModal onClose={() => setAuthModal(null)} onSwitch={m => setAuthModal(m)} />}
       {resetPassword && <ResetPasswordModal onClose={() => setResetPassword(false)} />}
 
+      {/* Report modal */}
+      {reportTarget && (
+        <div onClick={() => setReportTarget(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 20, maxWidth: 420, width: "100%" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Report {reportTarget.type}</div>
+            <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>“{reportTarget.preview}”</div>
+            {reportSuccess ? (
+              <>
+                <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 14 }}>Thanks — a moderator will review this shortly.</div>
+                <button style={styles.btnPrimary} onClick={() => setReportTarget(null)}>Close</button>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 8 }}>Reason</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                  {[
+                    { v: "spam", l: "Spam or promotional" },
+                    { v: "inappropriate", l: "Inappropriate or offensive" },
+                    { v: "inaccurate", l: "Inaccurate / misleading deal" },
+                    { v: "other", l: "Other" },
+                  ].map(opt => (
+                    <label key={opt.v} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                      <input type="radio" name="reportReason" value={opt.v} checked={reportReason === opt.v} onChange={() => setReportReason(opt.v)} />
+                      {opt.l}
+                    </label>
+                  ))}
+                </div>
+                <textarea
+                  placeholder="Optional: add a note for the moderators"
+                  value={reportNote}
+                  onChange={e => setReportNote(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", resize: "none", height: 64, lineHeight: 1.5, marginBottom: 10 }}
+                />
+                {reportError && <div style={{ fontSize: 12, color: "#e24b4a", marginBottom: 8 }}>{reportError}</div>}
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button style={styles.btn} onClick={() => setReportTarget(null)} disabled={reportSubmitting}>Cancel</button>
+                  <button style={styles.btnPrimary} onClick={submitReport} disabled={reportSubmitting}>
+                    {reportSubmitting ? "Sending..." : "Submit report"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Nav */}
       <div style={styles.nav}>
         <div style={styles.logo} onClick={() => setScreen("home")}>MealDeals</div>
@@ -646,6 +774,15 @@ export default function MealDeals() {
           )}
           {user ? (
             <>
+              {role === "moderator" && (
+                <button
+                  style={screen === "reports" ? styles.navBtnActive : styles.navBtn}
+                  onClick={() => { setScreen("reports"); fetchReports(); }}
+                  title="Reports"
+                >
+                  {isMobile ? "🚩" : "🚩 Reports"}{pendingReportCount > 0 && <span style={{ marginLeft: 6, background: "#e24b4a", color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 11, fontWeight: 700 }}>{pendingReportCount}</span>}
+                </button>
+              )}
               {role === "moderator" && <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "var(--accent)", borderRadius: 20, padding: "2px 8px" }}>MOD</span>}
               <button style={styles.navBtn} onClick={() => supabase.auth.signOut()}>{isMobile ? "Out" : "Log out"}</button>
             </>
@@ -872,6 +1009,52 @@ export default function MealDeals() {
         </div>
       )}
 
+      {/* REPORTS (moderator-only) */}
+      {screen === "reports" && role === "moderator" && (
+        <div style={styles.page}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>🚩 Pending reports</div>
+            <button style={styles.btn} onClick={fetchReports} disabled={reportsLoading}>{reportsLoading ? "Loading..." : "Refresh"}</button>
+          </div>
+          {!reportsLoading && pendingReports.length === 0 && (
+            <div style={{ fontSize: 13, color: "var(--text-faint)", padding: 24, textAlign: "center", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>No pending reports. 🎉</div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {pendingReports.map(r => (
+              <div key={r.id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, gap: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                    {r.target_type === "deal" ? "Deal" : "Comment"} · <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>{r.reason}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-faint)" }}>{new Date(r.created_at).toLocaleString()}</div>
+                </div>
+                {r.target ? (
+                  <div style={{ background: "var(--surface-2)", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 8 }}>
+                    {r.target_type === "deal" ? r.target.title : r.target.text}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 8, fontStyle: "italic" }}>(Target deleted)</div>
+                )}
+                {r.note && <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>Note: {r.note}</div>}
+                <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 10 }}>
+                  Reported by u/{r.reporter?.display_name || "unknown"}
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {r.target && r.target_type === "deal" && (
+                    <button style={{ ...styles.btn, fontSize: 12 }} onClick={() => { setSelectedDeal(r.target_id); setScreen("deal"); }}>View deal</button>
+                  )}
+                  {r.target && r.target_type === "comment" && r.target.deal_id && (
+                    <button style={{ ...styles.btn, fontSize: 12 }} onClick={() => { setSelectedDeal(r.target.deal_id); setScreen("deal"); }}>View thread</button>
+                  )}
+                  <button style={{ ...styles.btn, fontSize: 12 }} onClick={() => setReportStatus(r.id, "dismissed")}>Dismiss</button>
+                  <button style={{ ...styles.btn, fontSize: 12, color: "var(--accent)", borderColor: "var(--accent)" }} onClick={() => setReportStatus(r.id, "actioned")}>Mark actioned</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* DEAL DETAIL */}
       {screen === "deal" && openDeal && (
         <div style={styles.page}>
@@ -893,6 +1076,10 @@ export default function MealDeals() {
               {(role === "moderator" || openDeal?.user_id === user?.id) && (
                 <button style={{ ...styles.btn, color: "#e24b4a", borderColor: "#e24b4a", fontSize: 13 }}
                   onClick={() => handleDeleteDeal(openDeal.id)}>Delete deal</button>
+              )}
+              {user && openDeal?.user_id !== user?.id && (
+                <button style={{ ...styles.btn, fontSize: 13, color: "var(--text-muted)" }}
+                  onClick={() => openReport("deal", openDeal.id, openDeal.title)}>🚩 Report</button>
               )}
             </div>
           </div>
@@ -957,7 +1144,7 @@ export default function MealDeals() {
                   user={user} role={role} profilesById={profilesById}
                   replyingTo={replyingTo} setReplyingTo={setReplyingTo}
                   replyText={replyText} setReplyText={setReplyText}
-                  onComment={handleComment} onDelete={handleDeleteComment} styles={styles} />
+                  onComment={handleComment} onDelete={handleDeleteComment} onReport={openReport} styles={styles} />
               ))}
               {openDeal.comments.filter(c => !c.parent_id).length === 0 && (
                 <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 12 }}>No comments yet — be the first!</div>
@@ -1351,7 +1538,7 @@ function ResetPasswordModal({ onClose }) {
   );
 }
 
-function CommentNode({ node, dealId, user, role, profilesById, replyingTo, setReplyingTo, replyText, setReplyText, onComment, onDelete, styles }) {
+function CommentNode({ node, dealId, user, role, profilesById, replyingTo, setReplyingTo, replyText, setReplyText, onComment, onDelete, onReport, styles }) {
   const authorName = nameFor(node.user_id, profilesById, node.user);
   const authorAvatar = profilesById?.[node.user_id]?.avatar_url;
   const [collapsed, setCollapsed] = useState(false);
@@ -1411,6 +1598,12 @@ function CommentNode({ node, dealId, user, role, profilesById, replyingTo, setRe
                   Delete
                 </button>
               )}
+              {user && node.user_id !== user?.id && (
+                <button onClick={() => onReport("comment", node.id, node.text)}
+                  style={{ background: "none", border: "none", fontSize: 12, color: "var(--text-faint)", cursor: "pointer", padding: "3px 6px", borderRadius: 4, fontFamily: "inherit" }}>
+                  Report
+                </button>
+              )}
             </div>
 
             {/* Inline reply box */}
@@ -1435,7 +1628,7 @@ function CommentNode({ node, dealId, user, role, profilesById, replyingTo, setRe
               <CommentNode key={r.id} node={r} dealId={dealId} user={user} role={role} profilesById={profilesById}
                 replyingTo={replyingTo} setReplyingTo={setReplyingTo}
                 replyText={replyText} setReplyText={setReplyText}
-                onComment={onComment} onDelete={onDelete} styles={styles} />
+                onComment={onComment} onDelete={onDelete} onReport={onReport} styles={styles} />
             ))}
           </>
         )}
