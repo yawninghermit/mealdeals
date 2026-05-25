@@ -692,6 +692,9 @@ export default function MealDeals() {
     includesRow: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 },
     includeBadge: { background: "#e6f1fb", border: "1px solid #85b7eb", color: "#185fa5", fontSize: 11, padding: "2px 8px", borderRadius: 20 },
     expiredBadge: { display: "inline-flex", alignItems: "center", gap: 4, background: "#fdecea", border: "1px solid #e24b4a", color: "#a32d2d", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap" },
+    policyText: { fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 12 },
+    policyH2: { fontSize: 17, fontWeight: 700, color: "var(--text)", marginTop: 22, marginBottom: 8 },
+    policyList: { paddingLeft: 22, fontSize: 14, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 12 },
   };
 
   const css = `
@@ -720,7 +723,7 @@ export default function MealDeals() {
     <div style={styles.root}>
       <style>{css}</style>
 
-      {authModal && authModal !== "forgot" && <AuthModal mode={authModal} onClose={() => setAuthModal(null)} onSwitch={m => setAuthModal(m)} />}
+      {authModal && authModal !== "forgot" && <AuthModal mode={authModal} onClose={() => setAuthModal(null)} onSwitch={m => setAuthModal(m)} onShowPolicy={s => { setScreen(s); setAuthModal(null); }} />}
       {authModal === "forgot" && <ForgotPasswordModal onClose={() => setAuthModal(null)} onSwitch={m => setAuthModal(m)} />}
       {resetPassword && <ResetPasswordModal onClose={() => setResetPassword(false)} />}
 
@@ -1320,6 +1323,169 @@ export default function MealDeals() {
           </div>
         </div>
       )}
+
+      {/* PRIVACY POLICY */}
+      {screen === "privacy" && (
+        <div style={styles.page}>
+          <button style={styles.backBtn} onClick={() => setScreen("home")}>← Back</button>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 12, marginBottom: 2 }}>Privacy Policy</div>
+          <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 20 }}>Last updated: May 25, 2026</div>
+          <div style={styles.policyText}>
+            This policy explains what data MealDeals collects and what we do with it. Plain English, no tricks.
+          </div>
+
+          <div style={styles.policyH2}>1. What we collect</div>
+          <ul style={styles.policyList}>
+            <li><strong>Account info:</strong> your email, a display name, and an optional profile picture you upload.</li>
+            <li><strong>Content you post:</strong> deals, comments, votes, saved deals, and reports.</li>
+            <li><strong>Location info:</strong> when you post a deal, the address text you type is sent to a geocoder to convert it to lat/long coordinates. We don't track your device location.</li>
+            <li><strong>Technical info:</strong> standard server logs (IP, timestamp, page loaded) via our hosting providers.</li>
+          </ul>
+
+          <div style={styles.policyH2}>2. How we use it</div>
+          <ul style={styles.policyList}>
+            <li>To run the service — show your content to other users, log you in, send password reset emails.</li>
+            <li>To prevent abuse — the Report flow and the bot check at signup.</li>
+            <li>To improve the site.</li>
+          </ul>
+          <div style={styles.policyText}>We do not sell your data and we do not show ads.</div>
+
+          <div style={styles.policyH2}>3. Where it's stored</div>
+          <ul style={styles.policyList}>
+            <li><strong>Supabase</strong> — database, authentication, image storage.</li>
+            <li><strong>Vercel</strong> — site hosting.</li>
+            <li><strong>Cloudflare Turnstile</strong> — bot check at signup. Cloudflare may briefly see your IP.</li>
+            <li><strong>OpenStreetMap Nominatim</strong> — converts address text to coordinates when you post a deal.</li>
+          </ul>
+          <div style={styles.policyText}>Each provider has its own privacy policy. We share data with them only as needed to run the service.</div>
+
+          <div style={styles.policyH2}>4. Cookies and local storage</div>
+          <div style={styles.policyText}>We use your browser's localStorage to remember:</div>
+          <ul style={styles.policyList}>
+            <li>Your login session.</li>
+            <li>Deals you've upvoted or downvoted (so the arrows show the right state).</li>
+            <li>Deals you've saved.</li>
+          </ul>
+          <div style={styles.policyText}>We don't use third-party tracking cookies.</div>
+
+          <div style={styles.policyH2}>5. How long we keep your data</div>
+          <div style={styles.policyText}>
+            Account data and content stay until you delete them. In-app account deletion is coming soon; until then, email us and we'll delete your account, deals, comments, votes, and uploaded images.
+          </div>
+
+          <div style={styles.policyH2}>6. Your rights</div>
+          <div style={styles.policyText}>You can ask us to:</div>
+          <ul style={styles.policyList}>
+            <li>Access the data we have about you.</li>
+            <li>Correct anything that's wrong (or edit it yourself in your profile).</li>
+            <li>Delete your account and all your content.</li>
+          </ul>
+          <div style={styles.policyText}>
+            If you're in the EU/UK or California, you have additional rights under GDPR/CCPA — same way to exercise them: email us.
+          </div>
+
+          <div style={styles.policyH2}>7. Children</div>
+          <div style={styles.policyText}>
+            MealDeals isn't intended for users under 13. If you're a parent and your child has signed up, email us and we'll delete the account.
+          </div>
+
+          <div style={styles.policyH2}>8. Changes</div>
+          <div style={styles.policyText}>
+            If this policy changes, we'll update the "Last updated" date at the top.
+          </div>
+
+          <div style={styles.policyH2}>9. Contact</div>
+          <div style={styles.policyText}>
+            <a href="mailto:alectsimin16@gmail.com" style={{ color: "var(--accent)" }}>alectsimin16@gmail.com</a>
+          </div>
+          <div style={styles.policyText}>
+            MealDeals is operated by Alec Simin in the United States.
+          </div>
+        </div>
+      )}
+
+      {/* TERMS OF SERVICE */}
+      {screen === "terms" && (
+        <div style={styles.page}>
+          <button style={styles.backBtn} onClick={() => setScreen("home")}>← Back</button>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 12, marginBottom: 2 }}>Terms of Service</div>
+          <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 20 }}>Last updated: May 25, 2026</div>
+          <div style={styles.policyText}>
+            Welcome to MealDeals. By using the site you agree to these terms. If you don't agree, please don't use it.
+          </div>
+
+          <div style={styles.policyH2}>1. Who can use MealDeals</div>
+          <div style={styles.policyText}>
+            You need to be at least 13 to create an account (or 16 if you're in the EU/UK).
+          </div>
+
+          <div style={styles.policyH2}>2. Your account</div>
+          <div style={styles.policyText}>
+            Keep your password to yourself. You're responsible for what happens through your account.
+          </div>
+
+          <div style={styles.policyH2}>3. Your content</div>
+          <div style={styles.policyText}>
+            Deals, comments, photos, and anything else you post belong to you. By posting, you give MealDeals a non-exclusive, royalty-free license to store, display, and share that content so the service can function. You can delete your own content any time.
+          </div>
+
+          <div style={styles.policyH2}>4. What's not OK to post</div>
+          <ul style={styles.policyList}>
+            <li>Spam, scams, or affiliate-link bait.</li>
+            <li>Hateful, harassing, threatening, or otherwise illegal content.</li>
+            <li>Fake or knowingly misleading deals.</li>
+            <li>Content you don't have the right to share (copyrighted photos, trademarks, etc.).</li>
+            <li>Content that impersonates someone else.</li>
+          </ul>
+
+          <div style={styles.policyH2}>5. Moderation</div>
+          <div style={styles.policyText}>
+            Moderators can remove content or suspend accounts that violate these terms. If you see something that breaks the rules, use the 🚩 Report button on the deal or comment.
+          </div>
+
+          <div style={styles.policyH2}>6. Deal accuracy</div>
+          <div style={styles.policyText}>
+            Deals are posted by users. MealDeals doesn't verify prices, hours, or availability, and isn't affiliated with the restaurants listed. Confirm details with the merchant before you go.
+          </div>
+
+          <div style={styles.policyH2}>7. No warranty</div>
+          <div style={styles.policyText}>
+            MealDeals is provided as-is. We don't guarantee that it'll be available, accurate, or bug-free.
+          </div>
+
+          <div style={styles.policyH2}>8. Limitation of liability</div>
+          <div style={styles.policyText}>
+            To the extent allowed by law, the operator of MealDeals isn't liable for any indirect, incidental, or consequential damages arising from your use of the site.
+          </div>
+
+          <div style={styles.policyH2}>9. Termination</div>
+          <div style={styles.policyText}>
+            You can stop using the site any time. We can suspend or remove accounts that violate these terms.
+          </div>
+
+          <div style={styles.policyH2}>10. Changes</div>
+          <div style={styles.policyText}>
+            If we update these terms, we'll change the "Last updated" date at the top. Continuing to use the site after a change means you accept the new terms.
+          </div>
+
+          <div style={styles.policyH2}>11. Contact</div>
+          <div style={styles.policyText}>
+            <a href="mailto:alectsimin16@gmail.com" style={{ color: "var(--accent)" }}>alectsimin16@gmail.com</a>
+          </div>
+          <div style={styles.policyText}>
+            MealDeals is operated by Alec Simin in the United States.
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div style={{ marginTop: 40, padding: "18px 16px 24px", borderTop: "1px solid var(--border)", display: "flex", gap: 14, justifyContent: "center", alignItems: "center", fontSize: 12, color: "var(--text-faint)", flexWrap: "wrap" }}>
+        <span style={{ cursor: "pointer", color: screen === "privacy" ? "var(--accent)" : "var(--text-faint)" }} onClick={() => setScreen("privacy")}>Privacy</span>
+        <span>·</span>
+        <span style={{ cursor: "pointer", color: screen === "terms" ? "var(--accent)" : "var(--text-faint)" }} onClick={() => setScreen("terms")}>Terms</span>
+        <span>·</span>
+        <a href="mailto:alectsimin16@gmail.com" style={{ color: "var(--text-faint)", textDecoration: "none" }}>Contact</a>
+      </div>
     </div>
   );
 }
@@ -1328,7 +1494,7 @@ export default function MealDeals() {
 // Also enable CAPTCHA in your Supabase dashboard under Authentication > Settings
 const TURNSTILE_SITE_KEY = "YOUR_TURNSTILE_SITE_KEY";
 
-function AuthModal({ mode, onClose, onSwitch }) {
+function AuthModal({ mode, onClose, onSwitch, onShowPolicy }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -1429,6 +1595,14 @@ function AuthModal({ mode, onClose, onSwitch }) {
         <button style={btnStyle} onClick={handleSubmit} disabled={loading || !captchaToken}>
           {loading ? "..." : mode === "signup" ? "Sign up" : "Log in"}
         </button>
+        {mode === "signup" && (
+          <div style={{ fontSize: 11, color: "var(--text-faint)", textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
+            By signing up, you agree to our{" "}
+            <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => onShowPolicy("terms")}>Terms</span>
+            {" "}and{" "}
+            <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => onShowPolicy("privacy")}>Privacy Policy</span>.
+          </div>
+        )}
         <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", marginTop: 14 }}>
           {mode === "signup" ? "Already have an account? " : "No account? "}
           <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => onSwitch(mode === "signup" ? "login" : "signup")}>
