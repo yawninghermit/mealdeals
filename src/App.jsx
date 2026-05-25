@@ -831,24 +831,30 @@ export default function MealDeals() {
               <li>Your saved deals and reports you've filed</li>
             </ul>
             <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 8 }}>
-              Type <strong>{profile?.display_name}</strong> below to confirm:
+              Type your display name {profile?.display_name && <>(<strong>{profile.display_name}</strong>)</>} to confirm:
             </div>
             <input
               value={deleteConfirmText}
               onChange={e => setDeleteConfirmText(e.target.value)}
-              placeholder={profile?.display_name || ""}
+              placeholder={profile?.display_name || "display name"}
               autoFocus
+              disabled={!profile?.display_name}
               style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 12 }}
             />
             {deleteError && <div style={{ fontSize: 12, color: "#e24b4a", marginBottom: 8 }}>{deleteError}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button style={styles.btn} onClick={() => setDeleteAccountOpen(false)} disabled={deleting}>Cancel</button>
-              <button
-                style={{ ...styles.btn, color: "#fff", background: "#e24b4a", borderColor: "#e24b4a", opacity: (deleting || deleteConfirmText !== profile?.display_name) ? 0.5 : 1, cursor: (deleting || deleteConfirmText !== profile?.display_name) ? "not-allowed" : "pointer" }}
-                disabled={deleting || deleteConfirmText !== profile?.display_name}
-                onClick={handleDeleteAccount}>
-                {deleting ? "Deleting..." : "Delete forever"}
-              </button>
+              {(() => {
+                const canDelete = !deleting && !!profile?.display_name && deleteConfirmText === profile.display_name;
+                return (
+                  <button
+                    style={{ ...styles.btn, color: "#fff", background: "#e24b4a", borderColor: "#e24b4a", opacity: canDelete ? 1 : 0.5, cursor: canDelete ? "pointer" : "not-allowed" }}
+                    disabled={!canDelete}
+                    onClick={handleDeleteAccount}>
+                    {deleting ? "Deleting..." : "Delete forever"}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
