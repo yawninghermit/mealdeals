@@ -1396,7 +1396,7 @@ export default function MealDeals() {
 
           <div style={styles.policyH2}>9. Contact</div>
           <div style={styles.policyText}>
-            <a href="mailto:alectsimin16@gmail.com" style={{ color: "var(--accent)" }}>alectsimin16@gmail.com</a>
+            <a href="mailto:mealdeals12@gmail.com" style={{ color: "var(--accent)" }}>mealdeals12@gmail.com</a>
           </div>
           <div style={styles.policyText}>
             MealDeals is operated by Alec Simin in the United States.
@@ -1470,7 +1470,7 @@ export default function MealDeals() {
 
           <div style={styles.policyH2}>11. Contact</div>
           <div style={styles.policyText}>
-            <a href="mailto:alectsimin16@gmail.com" style={{ color: "var(--accent)" }}>alectsimin16@gmail.com</a>
+            <a href="mailto:mealdeals12@gmail.com" style={{ color: "var(--accent)" }}>mealdeals12@gmail.com</a>
           </div>
           <div style={styles.policyText}>
             MealDeals is operated by Alec Simin in the United States.
@@ -1484,7 +1484,7 @@ export default function MealDeals() {
         <span>·</span>
         <span style={{ cursor: "pointer", color: screen === "terms" ? "var(--accent)" : "var(--text-faint)" }} onClick={() => setScreen("terms")}>Terms</span>
         <span>·</span>
-        <a href="mailto:alectsimin16@gmail.com" style={{ color: "var(--text-faint)", textDecoration: "none" }}>Contact</a>
+        <a href="mailto:mealdeals12@gmail.com" style={{ color: "var(--text-faint)", textDecoration: "none" }}>Contact</a>
       </div>
     </div>
   );
