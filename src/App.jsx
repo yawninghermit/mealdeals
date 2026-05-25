@@ -123,6 +123,13 @@ export default function MealDeals() {
   const [pendingReportCount, setPendingReportCount] = useState(0);
   const [reportsFilter, setReportsFilter] = useState("pending"); // pending | reviewed | all
 
+  // Account deletion state
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+  const [accountDeletedBanner, setAccountDeletedBanner] = useState(false);
+
   const fetchProfile = async (userId) => {
     if (!userId) { setRole(null); setProfile(null); return; }
     const { data: existing } = await supabase
@@ -382,6 +389,42 @@ export default function MealDeals() {
     }
     if (wasPending && status !== "pending") setPendingReportCount(c => Math.max(0, c - 1));
     if (!wasPending && status === "pending") setPendingReportCount(c => c + 1);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user || !profile) return;
+    setDeleting(true);
+    setDeleteError(null);
+
+    const extractPath = (url, bucket) => {
+      const m = url?.match(new RegExp(`/${bucket}/(.+?)(\\?|$)`));
+      return m ? m[1] : null;
+    };
+
+    const { data: userDeals } = await supabase.from("deals").select("image_url").eq("user_id", user.id);
+    const dealImagePaths = (userDeals || []).map(d => extractPath(d.image_url, "deal-images")).filter(Boolean);
+    if (dealImagePaths.length > 0) {
+      await supabase.storage.from("deal-images").remove(dealImagePaths);
+    }
+    const avatarPath = extractPath(profile.avatar_url, "avatars");
+    if (avatarPath) {
+      await supabase.storage.from("avatars").remove([avatarPath]);
+    }
+
+    const { error } = await supabase.rpc("delete_user");
+    if (error) {
+      setDeleting(false);
+      setDeleteError(error.message);
+      return;
+    }
+
+    await supabase.auth.signOut();
+    setDeleting(false);
+    setDeleteAccountOpen(false);
+    setDeleteConfirmText("");
+    setScreen("home");
+    setAccountDeletedBanner(true);
+    setTimeout(() => setAccountDeletedBanner(false), 6000);
   };
 
   const fetchDeals = async () => {
@@ -773,6 +816,51 @@ export default function MealDeals() {
         </div>
       )}
 
+      {/* Delete account modal */}
+      {deleteAccountOpen && (
+        <div onClick={() => !deleting && setDeleteAccountOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%" }}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Delete your account?</div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.5 }}>
+              This permanently deletes:
+            </div>
+            <ul style={{ paddingLeft: 22, fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 14 }}>
+              <li>Your profile and avatar</li>
+              <li>All deals you've posted (and their images)</li>
+              <li>All comments you've written</li>
+              <li>Your saved deals and reports you've filed</li>
+            </ul>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 8 }}>
+              Type <strong>{profile?.display_name}</strong> below to confirm:
+            </div>
+            <input
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder={profile?.display_name || ""}
+              autoFocus
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 12 }}
+            />
+            {deleteError && <div style={{ fontSize: 12, color: "#e24b4a", marginBottom: 8 }}>{deleteError}</div>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button style={styles.btn} onClick={() => setDeleteAccountOpen(false)} disabled={deleting}>Cancel</button>
+              <button
+                style={{ ...styles.btn, color: "#fff", background: "#e24b4a", borderColor: "#e24b4a", opacity: (deleting || deleteConfirmText !== profile?.display_name) ? 0.5 : 1, cursor: (deleting || deleteConfirmText !== profile?.display_name) ? "not-allowed" : "pointer" }}
+                disabled={deleting || deleteConfirmText !== profile?.display_name}
+                onClick={handleDeleteAccount}>
+                {deleting ? "Deleting..." : "Delete forever"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Account deleted banner */}
+      {accountDeletedBanner && (
+        <div style={{ background: "#eaf3de", border: "1px solid #97c459", color: "#3b6d11", padding: "12px 20px", textAlign: "center", fontSize: 14, fontWeight: 600 }}>
+          Your account has been deleted. We're sorry to see you go.
+        </div>
+      )}
+
       {/* Nav */}
       <div style={styles.nav}>
         <div style={styles.logo} onClick={() => setScreen("home")}>MealDeals</div>
@@ -998,6 +1086,17 @@ export default function MealDeals() {
               </div>
             );
           })()}
+
+          {/* Danger zone */}
+          <div style={{ marginTop: 28, marginBottom: 28, padding: 16, border: "1px solid #e24b4a", borderRadius: 12, background: "rgba(226,75,74,0.05)" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#a32d2d", marginBottom: 6 }}>Danger zone</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.5 }}>
+              Deleting your account permanently removes your profile, all your deals, comments, saved deals, and reports. This cannot be undone.
+            </div>
+            <button style={{ ...styles.btn, color: "#a32d2d", borderColor: "#e24b4a", fontSize: 13 }} onClick={() => { setDeleteConfirmText(""); setDeleteError(null); setDeleteAccountOpen(true); }}>
+              Delete my account
+            </button>
+          </div>
 
           {/* Comment history */}
           <div style={{ marginBottom: 28 }}>
@@ -1370,7 +1469,7 @@ export default function MealDeals() {
 
           <div style={styles.policyH2}>5. How long we keep your data</div>
           <div style={styles.policyText}>
-            Account data and content stay until you delete them. In-app account deletion is coming soon; until then, email us and we'll delete your account, deals, comments, votes, and uploaded images.
+            Account data and content stay until you delete them. You can delete your account at any time from the Profile tab — this permanently removes your profile, deals, comments, saved deals, reports, and uploaded images. You can also email us to request deletion.
           </div>
 
           <div style={styles.policyH2}>6. Your rights</div>
