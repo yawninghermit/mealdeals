@@ -41,6 +41,13 @@ const timeAgo = (ts) => {
   return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
 
+const friendlyError = (error, fallback) => {
+  const msg = error?.message || "";
+  const match = msg.match(/rate_limit_exceeded:\s*(.+)/i);
+  if (match) return match[1].trim();
+  return fallback;
+};
+
 const avatarColor = (name = "") => {
   const colors = ["#e07b54","#5b8dd9","#59a96a","#9b6dcc","#d4a017","#3aa8a8"];
   let h = 0;
@@ -86,6 +93,7 @@ export default function MealDeals() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [commentError, setCommentError] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [postForm, setPostForm] = useState({
@@ -337,7 +345,7 @@ export default function MealDeals() {
     setReportSubmitting(false);
     if (error) {
       if (error.code === "23505") { setReportSuccess(true); return; }
-      setReportError(error.message);
+      setReportError(friendlyError(error, error.message));
       return;
     }
     setReportSuccess(true);
@@ -483,13 +491,19 @@ export default function MealDeals() {
     if (!user) { setAuthModal("login"); return; }
     const text = parentId ? replyText.trim() : newComment.trim();
     if (!text) return;
-    if (parentId) { setReplyText(""); setReplyingTo(null); } else setNewComment("");
+    setCommentError("");
     const { data, error } = await supabase
       .from("comments")
       .insert({ deal_id: dealId, username: profile?.display_name || username(user), text, user_id: user.id, parent_id: parentId })
       .select()
       .single();
-    if (!error && data) {
+    if (error) {
+      setCommentError(friendlyError(error, `Couldn't post comment: ${error.message}`));
+      setTimeout(() => setCommentError(""), 5000);
+      return;
+    }
+    if (data) {
+      if (parentId) { setReplyText(""); setReplyingTo(null); } else setNewComment("");
       setDeals(prev => prev.map(d =>
         d.id === dealId ? { ...d, comments: [...d.comments, { ...data, user: data.username, votes: 0 }] } : d
       ));
@@ -635,7 +649,7 @@ export default function MealDeals() {
       .select("*, comments(*)")
       .single();
     if (error) {
-      setPostError(`Couldn't post: ${error.message}`);
+      setPostError(friendlyError(error, `Couldn't post: ${error.message}`));
     } else if (data) {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
@@ -1298,11 +1312,14 @@ export default function MealDeals() {
                 <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 12 }}>No comments yet — be the first!</div>
               )}
               {user ? (
-                <div style={styles.inputRow}>
-                  <input style={styles.input} placeholder="Share your experience..." value={newComment} onChange={e => setNewComment(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleComment(openDeal.id)} />
-                  <button style={styles.btnPrimary} onClick={() => handleComment(openDeal.id)}>Post</button>
-                </div>
+                <>
+                  <div style={styles.inputRow}>
+                    <input style={styles.input} placeholder="Share your experience..." value={newComment} onChange={e => setNewComment(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleComment(openDeal.id)} />
+                    <button style={styles.btnPrimary} onClick={() => handleComment(openDeal.id)}>Post</button>
+                  </div>
+                  {commentError && <div style={{ fontSize: 12, color: "#e24b4a", marginTop: 6 }}>{commentError}</div>}
+                </>
               ) : (
                 <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>
                   <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={() => setAuthModal("login")}>Log in</span> to leave a comment.
