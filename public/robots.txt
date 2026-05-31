@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mealdeals.vercel.app/sitemap.xml
