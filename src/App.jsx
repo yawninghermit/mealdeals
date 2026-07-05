@@ -289,6 +289,7 @@ export default function MealDeals() {
     const file = e.target.files?.[0];
     if (e.target) e.target.value = "";
     if (!file || !user) return;
+    if (!file.type.startsWith("image/")) { setAvatarError("Please choose an image file."); return; }
     setAvatarError(null);
     setUploadingAvatar(true);
     let blob, ext, contentType;
@@ -549,11 +550,19 @@ export default function MealDeals() {
   };
 
   const uploadDealImage = async (file) => {
-    const ext = file.name.split(".").pop();
+    if (!file.type.startsWith("image/")) {
+      setImageError("Please choose an image file.");
+      return null;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setImageError("Image must be under 8 MB.");
+      return null;
+    }
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
     const path = `${user.id}/${Date.now()}.${ext}`;
     setUploadingImage(true);
     setImageError(null);
-    const { error } = await supabase.storage.from("deal-images").upload(path, file, { upsert: true });
+    const { error } = await supabase.storage.from("deal-images").upload(path, file, { upsert: true, contentType: file.type });
     setUploadingImage(false);
     if (error) {
       setImageError(`Upload failed: ${error.message}`);
@@ -1611,10 +1620,6 @@ export default function MealDeals() {
     </div>
   );
 }
-
-// Replace with your Cloudflare Turnstile site key from https://dash.cloudflare.com/
-// Also enable CAPTCHA in your Supabase dashboard under Authentication > Settings
-const TURNSTILE_SITE_KEY = "YOUR_TURNSTILE_SITE_KEY";
 
 function AuthModal({ mode, onClose, onSwitch, onShowPolicy }) {
   const [email, setEmail] = useState("");
