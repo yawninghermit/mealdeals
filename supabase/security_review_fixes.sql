@@ -37,7 +37,7 @@ create trigger trg_prevent_role_self_escalation
 
 create table if not exists public.deal_votes (
   user_id uuid not null references auth.users(id) on delete cascade,
-  deal_id bigint not null references public.deals(id) on delete cascade,
+  deal_id uuid not null references public.deals(id) on delete cascade,
   direction smallint not null check (direction in (-1, 1)),
   created_at timestamptz not null default now(),
   primary key (user_id, deal_id)
@@ -50,7 +50,7 @@ create policy "users manage their own votes"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
-create or replace function public.cast_vote(p_deal_id bigint, p_direction smallint)
+create or replace function public.cast_vote(p_deal_id uuid, p_direction smallint)
 returns void as $$
 declare
   existing smallint;
