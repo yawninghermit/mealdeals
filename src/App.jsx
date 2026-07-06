@@ -82,10 +82,7 @@ export default function MealDeals() {
   const [authModal, setAuthModal] = useState(null); // "login" | "signup" | "forgot" | null
   const [resetPassword, setResetPassword] = useState(false);
   const [myComments, setMyComments] = useState([]);
-  const [votedDeals, setVotedDeals] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("votedDeals") || "{}"); }
-    catch { return {}; }
-  });
+  const [votedDeals, setVotedDeals] = useState({});
   const [mealFilter, setMealFilter] = useState("All");
   const [dayFilter, setDayFilter] = useState([DAYS_SHORT[new Date().getDay()]]);
   const [sortBy, setSortBy] = useState("top");
@@ -213,17 +210,27 @@ export default function MealDeals() {
     setSavedDealIds(new Set((data || []).map(r => r.deal_id)));
   };
 
+  const fetchVotes = async (userId) => {
+    if (!userId) { setVotedDeals({}); return; }
+    const { data } = await supabase.from("deal_votes").select("deal_id, direction").eq("user_id", userId);
+    const next = {};
+    (data || []).forEach(v => { next[`${v.deal_id}-${v.direction === 1 ? "up" : "down"}`] = true; });
+    setVotedDeals(next);
+  };
+
   useEffect(() => {
     fetchDeals();
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       fetchProfile(session?.user?.id ?? null);
       fetchSaved(session?.user?.id ?? null);
+      fetchVotes(session?.user?.id ?? null);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       fetchProfile(session?.user?.id ?? null);
       fetchSaved(session?.user?.id ?? null);
+      fetchVotes(session?.user?.id ?? null);
       if (event === "PASSWORD_RECOVERY") setResetPassword(true);
     });
     return () => subscription.unsubscribe();
@@ -460,15 +467,21 @@ export default function MealDeals() {
     const extra = wasOpposite ? (dir === "up" ? 1 : -1) : 0;
     const totalDelta = delta + extra;
 
+    const prevDeals = deals;
+    const prevVoted = votedDeals;
+
     setDeals(prev => prev.map(d => d.id === dealId ? { ...d, votes: d.votes + totalDelta } : d));
 
     const newVoted = { ...votedDeals };
     if (newVoted[key]) { delete newVoted[key]; }
     else { newVoted[key] = true; delete newVoted[opposite]; }
     setVotedDeals(newVoted);
-    localStorage.setItem("votedDeals", JSON.stringify(newVoted));
 
-    await supabase.rpc("increment_votes", { deal_id: dealId, delta: totalDelta });
+    const { error } = await supabase.rpc("cast_vote", { p_deal_id: dealId, p_direction: dir === "up" ? 1 : -1 });
+    if (error) {
+      setDeals(prevDeals);
+      setVotedDeals(prevVoted);
+    }
   };
 
   const handleDeleteDeal = async (dealId) => {
@@ -1491,12 +1504,7 @@ export default function MealDeals() {
           <div style={styles.policyText}>Each provider has its own privacy policy. We share data with them only as needed to run the service.</div>
 
           <div style={styles.policyH2}>4. Cookies and local storage</div>
-          <div style={styles.policyText}>We use your browser's localStorage to remember:</div>
-          <ul style={styles.policyList}>
-            <li>Your login session.</li>
-            <li>Deals you've upvoted or downvoted (so the arrows show the right state).</li>
-            <li>Deals you've saved.</li>
-          </ul>
+          <div style={styles.policyText}>We use your browser's localStorage to remember your login session. Your votes and saved deals are stored in our database against your account, so they follow you across devices.</div>
           <div style={styles.policyText}>We don't use third-party tracking cookies.</div>
 
           <div style={styles.policyH2}>5. How long we keep your data</div>
