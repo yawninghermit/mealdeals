@@ -65,3 +65,10 @@ Added `middleware.js` at the repo root (Vercel Routing Middleware, framework-agn
 curl -A "facebookexternalhit/1.1" "https://mealdeals.vercel.app/?deal=<a-real-deal-id>"
 ```
 — you should see the deal-specific HTML above, not the normal `index.html`. If it doesn't fire, the most likely culprits are the middleware not being picked up (check the Vercel deployment's Functions tab for a `middleware` entry) or the env vars not being marked available at runtime. Also worth running the URL through Facebook's Sharing Debugger and Twitter's Card Validator once it's live, since those cache old unfurls aggressively.
+
+**Update — confirmed live in production.** The PR's preview deployment turned out to be behind Vercel's Preview Deployment Protection (SSO wall), which redirected Facebook's scraper to `vercel.com/login` before it ever reached our middleware — a Vercel platform behavior, not a bug in this code. Reset the branch onto master (PRs #3/#4 had already squash-merged, so the branch's original commits were replayed as a clean cherry-pick to avoid a stale-merge-base conflict) and merged directly, then re-tested against production with Facebook's Sharing Debugger:
+```
+og:title: "Meatball Monday — MealDeals"
+og:description: "Meatball Monday at mclanahans — $4"
+```
+Confirmed working. `og:image` correctly fell back to the site default since that particular deal has no photo. The only debugger warning was a missing optional `fb:app_id` (only needed for Facebook Insights analytics, not required for the preview card to render).
