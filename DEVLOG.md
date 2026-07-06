@@ -42,3 +42,26 @@ With `cast_vote` live, updated the client (`src/App.jsx`):
 - Corrected the Privacy Policy's "Cookies and local storage" section — it previously claimed votes and saved deals were tracked via `localStorage`, but saved deals were already server-side (`fetchSaved`) and votes now are too. Only the login session actually lives in `localStorage`.
 
 **Verified:** app builds clean; loaded in a headless browser and confirmed no runtime crash from the refactor and the corrected Privacy Policy text renders correctly. **Not verified:** the actual vote flow end-to-end against a live Supabase project (no real credentials available in this environment) — needs a manual click-test of upvote/downvote/switch-vote before this ships. Also worth knowing: any user who voted before this migration has no row in `deal_votes` yet, so their vote arrows will show as un-highlighted on next load even though the deal's vote count itself is unaffected.
+
+## 2026-07-06 — Shareable deal links + Share button
+
+Deals are now deep-linkable via `?deal=<id>` (`src/App.jsx`): read on mount, kept in sync with the deal screen via `history.pushState`, restored on browser back/forward (`popstate`), with a loading state and a "Deal not found" fallback for bad/stale links. Added a "🔗 Share" button on the deal detail page — native share sheet (`navigator.share`) on mobile, clipboard copy + "Link copied!" confirmation as the desktop fallback.
+
+Verified in a headless browser with mocked Supabase responses: deep link to a nonexistent deal shows "Deal not found", clicking into a real deal updates the URL, Share button copies the exact URL, and browser back clears the `?deal=` param. (One red herring during testing: a mocked deal with `days: ['Fr','Sa']` didn't render — turned out to be the app's existing "filter to today" default correctly excluding it, not a bug.)
+
+## 2026-07-06 — Dynamic Open Graph tags for shared deal links
+
+The Share button above only helps if the resulting link unfurls into a rich preview card (title/photo/price) in iMessage/Discord/group chats — otherwise every shared link shows the same generic site-wide preview. Since this is a client-rendered Vite SPA with no server-side rendering, `index.html`'s OG tags are static and can't vary per deal on their own.
+
+Added `middleware.js` at the repo root (Vercel Routing Middleware, framework-agnostic — no `vercel.json` changes needed, auto-detected by file location). On each request to `/`:
+- If there's no `?deal=` param, or the User-Agent doesn't match a known link-preview crawler (Facebook, Twitter/X, Discord, Slack, WhatsApp, Telegram, LinkedIn, iMessage, etc.), it returns `undefined` immediately and Vercel serves the normal SPA untouched — real users are never affected.
+- Otherwise, it fetches that deal from Supabase (same anon key/public read access the client already uses) and returns a small standalone HTML document with deal-specific `<title>`, `og:*`, and `twitter:*` tags (title, restaurant + price as the description, the deal's photo or the site default), plus a `<meta http-equiv="refresh">` so a real browser that somehow lands here still reaches the app.
+- Falls through to the normal SPA (returns `undefined`) on any failure: missing env vars, deal not found, or the Supabase fetch throwing — this never blocks or breaks the real site.
+
+**Verified:** invoked the exported middleware function directly in Node (it's plain Web-standard `Request`/`Response`/`fetch`, no Vercel-specific APIs) with mocked `fetch`, covering: real-browser passthrough, no-`?deal=`-param passthrough, a Facebook-bot and a Discord-bot request both producing correctly escaped deal-specific HTML (including a deliberately hostile deal title containing `<script>` and quotes, to confirm `escapeHtml` prevents injection), deal-not-found passthrough, and Supabase-fetch-failure passthrough.
+
+**Not verified — needs your action after deploy:** I could not confirm Vercel actually wires up `middleware.js` the way I expect for this project. Vercel's own docs pages 403'd every `WebFetch` attempt from this environment, and there's no Vercel CLI/account access here to run `vercel dev` against the real project (login also failed — no network path to Vercel's auth from this sandbox). The request-handling logic above is solid; what's unverified is strictly the Vercel-side wiring (whether `middleware.js` at the project root is auto-detected for a Vite project, and whether `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` are available to it at runtme, not just at Vite's build time). After deploying, check with:
+```
+curl -A "facebookexternalhit/1.1" "https://mealdeals.vercel.app/?deal=<a-real-deal-id>"
+```
+— you should see the deal-specific HTML above, not the normal `index.html`. If it doesn't fire, the most likely culprits are the middleware not being picked up (check the Vercel deployment's Functions tab for a `middleware` entry) or the env vars not being marked available at runtime. Also worth running the URL through Facebook's Sharing Debugger and Twitter's Card Validator once it's live, since those cache old unfurls aggressively.
