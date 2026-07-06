@@ -7,7 +7,17 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
+    files: ['middleware.js'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.node, Request: 'readonly', Response: 'readonly', fetch: 'readonly' },
+    },
+  },
+  {
     files: ['**/*.{js,jsx}'],
+    ignores: ['middleware.js'],
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,
