@@ -128,6 +128,8 @@ export default function MealDeals() {
   const [pendingReportCount, setPendingReportCount] = useState(0);
   const [reportsFilter, setReportsFilter] = useState("pending"); // pending | reviewed | all
 
+  const [shareCopied, setShareCopied] = useState(false);
+
   // Account deletion state
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -233,7 +235,36 @@ export default function MealDeals() {
       fetchVotes(session?.user?.id ?? null);
       if (event === "PASSWORD_RECOVERY") setResetPassword(true);
     });
+
+    const dealIdFromUrl = new URLSearchParams(window.location.search).get("deal");
+    if (dealIdFromUrl) { setSelectedDeal(dealIdFromUrl); setScreen("deal"); }
+
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Keep the URL's ?deal= param in sync with the deal screen, so deal links are shareable.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get("deal");
+    if (screen === "deal" && selectedDeal) {
+      if (current !== String(selectedDeal)) {
+        url.searchParams.set("deal", selectedDeal);
+        window.history.pushState({}, "", url);
+      }
+    } else if (current) {
+      url.searchParams.delete("deal");
+      window.history.pushState({}, "", url);
+    }
+  }, [screen, selectedDeal]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const dealId = new URLSearchParams(window.location.search).get("deal");
+      if (dealId) { setSelectedDeal(dealId); setScreen("deal"); }
+      else { setScreen(s => s === "deal" ? "home" : s); }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   useEffect(() => {
@@ -243,6 +274,20 @@ export default function MealDeals() {
       setAvatarError(null);
     }
   }, [screen, profile?.display_name]);
+
+  const handleShare = async (deal) => {
+    const url = `${window.location.origin}${window.location.pathname}?deal=${deal.id}`;
+    const shareData = { title: deal.title, text: `${deal.title} at ${deal.restaurant} — ${deal.price}`, url };
+    if (navigator.share) {
+      try { await navigator.share(shareData); } catch { /* user cancelled the share sheet */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
 
   const toggleSaveDeal = async (dealId) => {
     if (!user) { setAuthModal("login"); return; }
@@ -1240,6 +1285,20 @@ export default function MealDeals() {
       )}
 
       {/* DEAL DETAIL */}
+      {screen === "deal" && !openDeal && (
+        <div style={styles.page}>
+          <button style={styles.backBtn} onClick={() => setScreen("home")}>← Back to deals</button>
+          {loading ? (
+            <div style={styles.emptyState}><div style={{ fontSize: 13 }}>Loading deal...</div></div>
+          ) : (
+            <div style={styles.emptyState}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Deal not found</div>
+              <div style={{ fontSize: 13 }}>It may have been removed by its owner.</div>
+            </div>
+          )}
+        </div>
+      )}
       {screen === "deal" && openDeal && (
         <div style={styles.page}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -1248,6 +1307,9 @@ export default function MealDeals() {
               {openDeal?.expiredAt && (
                 <span style={styles.expiredBadge}>🚩 Expired {new Date(openDeal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
               )}
+              <button style={{ ...styles.btn, fontSize: 13 }} onClick={() => handleShare(openDeal)}>
+                {shareCopied ? "Link copied!" : "🔗 Share"}
+              </button>
               {(role === "moderator" || openDeal?.user_id === user?.id) && (
                 <button style={{ ...styles.btn, fontSize: 13, ...(openDeal?.expiredAt ? {} : { color: "#a32d2d", borderColor: "#e24b4a" }) }}
                   onClick={() => handleToggleExpired(openDeal)}>
