@@ -35,9 +35,9 @@ export default async function middleware(request) {
   }
   if (!deal) return;
 
-  const title = escapeHtml(`${deal.title} — MealDeals`);
+  const title = escapeHtml(`${deal.title} — ih8fullprice`);
   const description = escapeHtml(`${deal.title} at ${deal.restaurant} — ${deal.price}`);
-  const image = escapeHtml(deal.image_url || "https://mealdeals.vercel.app/og-image.png");
+  const image = escapeHtml(deal.image_url || "https://ih8fullprice.com/og-image.png");
   const pageUrl = escapeHtml(url.toString());
 
   const html = `<!doctype html>
@@ -48,7 +48,7 @@ export default async function middleware(request) {
 <meta name="description" content="${description}" />
 <link rel="canonical" href="${pageUrl}" />
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content="MealDeals" />
+<meta property="og:site_name" content="ih8fullprice" />
 <meta property="og:title" content="${title}" />
 <meta property="og:description" content="${description}" />
 <meta property="og:url" content="${pageUrl}" />
