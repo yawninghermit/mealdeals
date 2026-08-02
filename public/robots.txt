@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://mealdeals.vercel.app/sitemap.xml
+Sitemap: https://ih8fullprice.com/sitemap.xml

@@ -5,7 +5,7 @@
       <stop offset="1" stop-color="#f7f5f2"/>
     </linearGradient>
     <style>
-      .title { font: 700 96px 'DM Sans', system-ui, sans-serif; fill: #1a1816; letter-spacing: -2px; }
+      .title { font: 700 96px 'DM Sans', system-ui, sans-serif; fill: #1a1816; letter-spacing: 0; }
       .accent { fill: #d85a30; }
       .tagline { font: 600 36px 'DM Sans', system-ui, sans-serif; fill: #6b6560; }
       .url { font: 600 22px 'DM Sans', system-ui, sans-serif; fill: #a09a93; letter-spacing: 1px; }
@@ -25,7 +25,7 @@
   </g>
 
   <!-- Title -->
-  <text x="80" y="240" class="title">Meal<tspan class="accent">Deals</tspan></text>
+  <text x="80" y="240" class="title">ih8<tspan class="accent">fullprice</tspan></text>
 
   <!-- Tagline -->
   <text x="80" y="310" class="tagline">Find food deals near you.</text>
@@ -43,5 +43,5 @@
   </g>
 
   <!-- URL at bottom -->
-  <text x="80" y="570" class="url">MEALDEALS.VERCEL.APP</text>
+  <text x="80" y="570" class="url">IH8FULLPRICE.COM</text>
 </svg>

@@ -69,7 +69,7 @@ const buildTree = (comments) => {
 const MEAL_TIMES = ["All", "Breakfast", "Lunch", "Dinner"];
 const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
-export default function MealDeals() {
+export default function App() {
   const isMobile = useIsMobile();
   const [screen, setScreen] = useState("home");
   const [selectedDeal, setSelectedDeal] = useState(null);
@@ -950,7 +950,7 @@ export default function MealDeals() {
 
       {/* Nav */}
       <div style={styles.nav}>
-        <div style={styles.logo} onClick={() => setScreen("home")}>MealDeals</div>
+        <div style={styles.logo} onClick={() => setScreen("home")}>ih8fullprice</div>
         <div style={styles.navRight}>
           <button style={screen === "map" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("map")}>Map</button>
           {user && <button style={screen === "saved" ? styles.navBtnActive : styles.navBtn} onClick={() => setScreen("saved")}>{isMobile ? "★" : "★ Saved"}</button>}
@@ -1537,7 +1537,7 @@ export default function MealDeals() {
           <div style={{ fontSize: 24, fontWeight: 700, marginTop: 12, marginBottom: 2 }}>Privacy Policy</div>
           <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 20 }}>Last updated: May 25, 2026</div>
           <div style={styles.policyText}>
-            This policy explains what data MealDeals collects and what we do with it. Plain English, no tricks.
+            This policy explains what data ih8fullprice collects and what we do with it. Plain English, no tricks.
           </div>
 
           <div style={styles.policyH2}>1. What we collect</div>
@@ -1587,7 +1587,7 @@ export default function MealDeals() {
 
           <div style={styles.policyH2}>7. Children</div>
           <div style={styles.policyText}>
-            MealDeals isn't intended for users under 13. If you're a parent and your child has signed up, email us and we'll delete the account.
+            ih8fullprice isn't intended for users under 13. If you're a parent and your child has signed up, email us and we'll delete the account.
           </div>
 
           <div style={styles.policyH2}>8. Changes</div>
@@ -1600,7 +1600,7 @@ export default function MealDeals() {
             <a href="mailto:mealdeals12@gmail.com" style={{ color: "var(--accent)" }}>mealdeals12@gmail.com</a>
           </div>
           <div style={styles.policyText}>
-            MealDeals is operated by Alec Simin in the United States.
+            ih8fullprice is operated by Alec Simin in the United States.
           </div>
         </div>
       )}
@@ -1612,10 +1612,10 @@ export default function MealDeals() {
           <div style={{ fontSize: 24, fontWeight: 700, marginTop: 12, marginBottom: 2 }}>Terms of Service</div>
           <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 20 }}>Last updated: May 25, 2026</div>
           <div style={styles.policyText}>
-            Welcome to MealDeals. By using the site you agree to these terms. If you don't agree, please don't use it.
+            Welcome to ih8fullprice. By using the site you agree to these terms. If you don't agree, please don't use it.
           </div>
 
-          <div style={styles.policyH2}>1. Who can use MealDeals</div>
+          <div style={styles.policyH2}>1. Who can use ih8fullprice</div>
           <div style={styles.policyText}>
             You need to be at least 13 to create an account (or 16 if you're in the EU/UK).
           </div>
@@ -1627,7 +1627,7 @@ export default function MealDeals() {
 
           <div style={styles.policyH2}>3. Your content</div>
           <div style={styles.policyText}>
-            Deals, comments, photos, and anything else you post belong to you. By posting, you give MealDeals a non-exclusive, royalty-free license to store, display, and share that content so the service can function. You can delete your own content any time.
+            Deals, comments, photos, and anything else you post belong to you. By posting, you give ih8fullprice a non-exclusive, royalty-free license to store, display, and share that content so the service can function. You can delete your own content any time.
           </div>
 
           <div style={styles.policyH2}>4. What's not OK to post</div>
@@ -1646,17 +1646,17 @@ export default function MealDeals() {
 
           <div style={styles.policyH2}>6. Deal accuracy</div>
           <div style={styles.policyText}>
-            Deals are posted by users. MealDeals doesn't verify prices, hours, or availability, and isn't affiliated with the restaurants listed. Confirm details with the merchant before you go.
+            Deals are posted by users. ih8fullprice doesn't verify prices, hours, or availability, and isn't affiliated with the restaurants listed. Confirm details with the merchant before you go.
           </div>
 
           <div style={styles.policyH2}>7. No warranty</div>
           <div style={styles.policyText}>
-            MealDeals is provided as-is. We don't guarantee that it'll be available, accurate, or bug-free.
+            ih8fullprice is provided as-is. We don't guarantee that it'll be available, accurate, or bug-free.
           </div>
 
           <div style={styles.policyH2}>8. Limitation of liability</div>
           <div style={styles.policyText}>
-            To the extent allowed by law, the operator of MealDeals isn't liable for any indirect, incidental, or consequential damages arising from your use of the site.
+            To the extent allowed by law, the operator of ih8fullprice isn't liable for any indirect, incidental, or consequential damages arising from your use of the site.
           </div>
 
           <div style={styles.policyH2}>9. Termination</div>
@@ -1674,7 +1674,7 @@ export default function MealDeals() {
             <a href="mailto:mealdeals12@gmail.com" style={{ color: "var(--accent)" }}>mealdeals12@gmail.com</a>
           </div>
           <div style={styles.policyText}>
-            MealDeals is operated by Alec Simin in the United States.
+            ih8fullprice is operated by Alec Simin in the United States.
           </div>
         </div>
       )}
