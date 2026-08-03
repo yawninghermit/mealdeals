@@ -72,3 +72,46 @@ og:title: "Meatball Monday — MealDeals"
 og:description: "Meatball Monday at mclanahans — $4"
 ```
 Confirmed working. `og:image` correctly fell back to the site default since that particular deal has no photo. The only debugger warning was a missing optional `fb:app_id` (only needed for Facebook Insights analytics, not required for the preview card to render).
+
+## 2026-08-03 — Custom domain: ih8fullprice.com
+
+Bought `ih8fullprice.com` through Cloudflare Registrar; swapped every hardcoded
+`mealdeals.vercel.app` URL over to it:
+
+- `index.html` — `og:url`, `og:image`, `twitter:image`, `<link rel="canonical">`.
+- `public/sitemap.xml` — the `<loc>` entry.
+- `public/robots.txt` — the `Sitemap:` line.
+- `middleware.js` — the fallback `og:image` used when a shared deal has no photo.
+- `README.md` — the "Live" link.
+
+Chose the apex (`ih8fullprice.com`, no `www`) as the canonical hostname, so `www`
+should be configured to redirect to it rather than serve in parallel — two hostnames
+serving identical content splits SEO and makes the canonical tag inconsistent.
+
+Nothing in `src/` needed changing: the app never hardcodes its own origin. Auth
+redirects use `window.location.origin` (`App.jsx:373`, `:1866`) and share links are
+built from the current location, so both follow the domain automatically — provided
+the new origin is allowlisted in Supabase Auth (see below). The `vercel.json` CSP is
+also origin-relative (`'self'`, plus third-party hosts) and needs no edit.
+
+**Dashboard steps this commit does NOT cover** — the code is domain-correct but the
+site won't actually serve from the new domain, and auth/CAPTCHA will break on it,
+until these are done by hand:
+
+1. **Vercel** > Project > Settings > Domains: add `ih8fullprice.com` and
+   `www.ih8fullprice.com`, set the apex as primary.
+2. **Cloudflare DNS**: add the exact records Vercel shows on that screen. Cloudflare
+   Registrar domains must stay on Cloudflare nameservers, so Vercel's "change your
+   nameservers" path is not an option here — DNS records are the only route. Set the
+   records to **DNS only** (grey cloud), not proxied, so Vercel can issue its TLS cert.
+3. **Cloudflare Turnstile** > the widget for this site > Hostname Management: add
+   `ih8fullprice.com`. Turnstile validates against its hostname allowlist, so without
+   this, signup and login fail on the new domain while still working on the old one.
+4. **Supabase** > Authentication > URL Configuration: set Site URL to
+   `https://ih8fullprice.com` and add it to Redirect URLs. Password-reset and
+   confirmation emails are generated server-side from Site URL, and `redirectTo:
+   window.location.origin` is rejected unless the origin is allowlisted.
+5. **Google Search Console**: add the new property and submit the new sitemap.
+
+Keep `mealdeals.vercel.app` alive and redirecting for a while — old shared deal links
+(`?deal=<id>`) are already circulating and will 404 otherwise.

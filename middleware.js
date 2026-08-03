@@ -37,7 +37,7 @@ export default async function middleware(request) {
 
   const title = escapeHtml(`${deal.title} — MealDeals`);
   const description = escapeHtml(`${deal.title} at ${deal.restaurant} — ${deal.price}`);
-  const image = escapeHtml(deal.image_url || "https://mealdeals.vercel.app/og-image.png");
+  const image = escapeHtml(deal.image_url || "https://ih8fullprice.com/og-image.png");
   const pageUrl = escapeHtml(url.toString());
 
   const html = `<!doctype html>

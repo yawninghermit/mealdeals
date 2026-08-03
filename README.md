@@ -2,7 +2,7 @@
 
 A community-driven app for finding and sharing food deals in your area.
 
-**Live:** [mealdeals.vercel.app](https://mealdeals.vercel.app)
+**Live:** [ih8fullprice.com](https://ih8fullprice.com)
 
 ---
 
