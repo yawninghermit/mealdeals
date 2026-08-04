@@ -85,7 +85,6 @@ export default function App() {
   const [votedDeals, setVotedDeals] = useState({});
   const [mealFilter, setMealFilter] = useState("All");
   const [dayFilter, setDayFilter] = useState([DAYS_SHORT[new Date().getDay()]]);
-  const [sortBy, setSortBy] = useState("top");
   const [savedDealIds, setSavedDealIds] = useState(new Set());
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -745,14 +744,6 @@ export default function App() {
     if (searchQuery && !d.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !d.restaurant.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
-  }).sort((a, b) => {
-    if (sortBy === "newest") return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-    if (sortBy === "expiring") {
-      const ax = a.expiredAt ? new Date(a.expiredAt).getTime() : Infinity;
-      const bx = b.expiredAt ? new Date(b.expiredAt).getTime() : Infinity;
-      return ax - bx;
-    }
-    return b.votes - a.votes;
   });
 
   const openDeal = deals.find(d => d.id === selectedDeal);
@@ -768,9 +759,6 @@ export default function App() {
     filterBar: { display: "flex", gap: 8, overflowX: "auto", marginBottom: 12, paddingBottom: 4 },
     chip: { flexShrink: 0, padding: "6px 14px", borderRadius: 20, border: "1px solid var(--border)", fontSize: 13, background: "var(--surface)", color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" },
     chipActive: { flexShrink: 0, padding: "6px 14px", borderRadius: 20, border: "1px solid var(--accent)", fontSize: 13, background: "var(--accent-light)", color: "var(--accent-dark)", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, whiteSpace: "nowrap" },
-    sortRow: { display: "flex", alignItems: "center", gap: 6, marginBottom: 16, fontSize: 13, color: "var(--text-muted)" },
-    sortBtn: { padding: "4px 10px", borderRadius: 6, border: "none", background: "transparent", fontSize: 13, color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit" },
-    sortBtnActive: { padding: "4px 10px", borderRadius: 6, border: "none", background: "var(--surface-2)", fontSize: 13, color: "var(--text)", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
     card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px", marginBottom: 12, cursor: "pointer", transition: "border-color 0.15s" },
     cardHeader: { display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 },
     voteCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: isMobile ? 44 : 38 },
@@ -1015,13 +1003,6 @@ export default function App() {
                 </button>
               );
             })}
-          </div>
-
-          <div style={styles.sortRow}>
-            <span>Sort:</span>
-            {[["top","Top voted"],["newest","Newest"],["expiring","Expiring soon"]].map(([k,label]) => (
-              <button key={k} style={sortBy === k ? styles.sortBtnActive : styles.sortBtn} onClick={() => setSortBy(k)}>{label}</button>
-            ))}
           </div>
 
           {loading && <div style={styles.emptyState}><div style={{ fontSize: 13 }}>Loading deals...</div></div>}
