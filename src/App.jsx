@@ -979,7 +979,6 @@ export default function App() {
       {screen === "home" && (
         <div style={styles.page}>
           <div style={styles.searchBar}>
-            <span style={{ fontSize: 16 }}>🔍</span>
             <input style={styles.searchInput} placeholder="Search deals, restaurants..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             {searchQuery && <span style={{ fontSize: 13, color: "var(--text-muted)", cursor: "pointer" }} onClick={() => setSearchQuery("")}>✕</span>}
           </div>
