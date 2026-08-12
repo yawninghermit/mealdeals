@@ -801,6 +801,9 @@ export default function App() {
     priceBadge: { background: "#eaf3de", border: "1px solid #97c459", color: "#3b6d11", fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 20, whiteSpace: "nowrap" },
     badge: { background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-muted)", fontSize: 11, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap" },
     desc: { fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 8 },
+    // Feed cards clamp to two lines so the scan stays dense; the full text is on the deal page.
+    descClamp: { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+    thumb: { width: 72, height: 72, objectFit: "cover", borderRadius: 8, flexShrink: 0, display: "block" },
     metaRow: { display: "flex", gap: 12, fontSize: 12, color: "var(--text-faint)", alignItems: "center", flexWrap: "wrap" },
     verified: { color: "#1d9e75", fontWeight: 600, fontSize: 11 },
     divider: { borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 },
@@ -2087,29 +2090,37 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
           <button style={votedDeals[`${deal.id}-down`] ? styles.voteBtnDown : styles.voteBtn} onClick={() => onVote(deal.id, "down")}>▼</button>
         </div>
         <div style={styles.dealBody}>
-          {deal.restaurant && <div style={styles.dealWhere}>{deal.restaurant}</div>}
-          <div style={styles.titleRow}>
-            <span style={styles.dealTitle}>{deal.title}</span>
-            {deal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden", border: "1px solid #000" }}>{deal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
-            <span style={styles.priceBadge}>{deal.price}</span>
-            <span onClick={e => { e.stopPropagation(); onToggleSave(deal.id); }}
-              title={isSaved ? "Unsave" : "Save"}
-              style={{ marginLeft: "auto", fontSize: 18, cursor: "pointer", flexShrink: 0, color: isSaved ? "var(--accent)" : "var(--text-faint)", lineHeight: 1 }}>
-              {isSaved ? "★" : "☆"}
-            </span>
-            {canDelete && (
-              <span onClick={e => { e.stopPropagation(); onDelete(deal.id); }}
-                style={{ fontSize: 12, color: "#e24b4a", cursor: "pointer", flexShrink: 0 }}>Delete</span>
+          {/* Where / what / how much sit together at the top so the card can be
+              skipped on those three alone; the photo shrinks to a thumbnail beside them. */}
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {deal.restaurant && <div style={styles.dealWhere}>{deal.restaurant}</div>}
+              <div style={styles.titleRow}>
+                <span style={styles.dealTitle}>{deal.title}</span>
+                {deal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden", border: "1px solid #000" }}>{deal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
+                <span style={styles.priceBadge}>{deal.price}</span>
+                <span onClick={e => { e.stopPropagation(); onToggleSave(deal.id); }}
+                  title={isSaved ? "Unsave" : "Save"}
+                  style={{ marginLeft: "auto", fontSize: 18, cursor: "pointer", flexShrink: 0, color: isSaved ? "var(--accent)" : "var(--text-faint)", lineHeight: 1 }}>
+                  {isSaved ? "★" : "☆"}
+                </span>
+                {canDelete && (
+                  <span onClick={e => { e.stopPropagation(); onDelete(deal.id); }}
+                    style={{ fontSize: 12, color: "#e24b4a", cursor: "pointer", flexShrink: 0 }}>Delete</span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                {(deal.mealTimes || []).map(m => <span key={m} style={styles.badge}>{m}</span>)}
+                {deal.verified && <span style={styles.verified}>✓ Verified</span>}
+                {deal.expiredAt && <span style={styles.expiredBadge}>🚩 Expired {new Date(deal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
+              </div>
+            </div>
+            {deal.imageUrl && (
+              <img src={deal.imageUrl} alt={deal.title} style={styles.thumb} />
             )}
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-            {(deal.mealTimes || []).map(m => <span key={m} style={styles.badge}>{m}</span>)}
-            {deal.verified && <span style={styles.verified}>✓ Verified</span>}
-            {deal.expiredAt && <span style={styles.expiredBadge}>🚩 Expired {new Date(deal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
-          </div>
-          <div style={styles.desc}>{deal.description}</div>
-          {deal.imageUrl && (
-            <img src={deal.imageUrl} alt={deal.title} style={{ width: "100%", height: "auto", borderRadius: 8, marginBottom: 8, display: "block" }} />
+          {deal.description && (
+            <div style={{ ...styles.desc, ...styles.descClamp }}>{deal.description}</div>
           )}
           <div style={styles.metaRow}>
             {timeRange(deal) && <span>🕐 {timeRange(deal)}</span>}
