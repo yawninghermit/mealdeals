@@ -1372,9 +1372,11 @@ export default function App() {
                 <div style={{ fontSize: 15, color: "var(--text)", marginBottom: 12, lineHeight: 1.6 }}>{openDeal.description}</div>
                 {openDeal.days.length > 0 && (
                   <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                    {DAYS_SHORT.filter(d => openDeal.days.includes(d)).map(d => (
+                    {DAYS_SHORT.map(d => (
                       <div key={d} style={{ width: 30, height: 30, borderRadius: "50%", fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center",
-                        background: "var(--accent-light)", color: "var(--accent-dark)", border: "1px solid var(--accent)" }}>{d}</div>
+                        background: openDeal.days.includes(d) ? "var(--accent-light)" : "var(--surface-2)",
+                        color: openDeal.days.includes(d) ? "var(--accent-dark)" : "var(--text-faint)",
+                        border: `1px solid ${openDeal.days.includes(d) ? "var(--accent)" : "var(--border)"}` }}>{d}</div>
                     ))}
                   </div>
                 )}
