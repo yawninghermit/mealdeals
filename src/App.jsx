@@ -769,6 +769,7 @@ export default function App() {
     dealBody: { flex: 1 },
     titleRow: { display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap", marginBottom: 4 },
     dealTitle: { fontSize: 15, fontWeight: 700, color: "var(--text)", lineHeight: 1.3 },
+    dealSub: { fontSize: 13, color: "var(--text-muted)", fontWeight: 600, marginBottom: 8 },
     priceBadge: { background: "#eaf3de", border: "1px solid #97c459", color: "#3b6d11", fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 20, whiteSpace: "nowrap" },
     badge: { background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-muted)", fontSize: 11, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap" },
     desc: { fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 8 },
@@ -1327,29 +1328,22 @@ export default function App() {
                     {savedDealIds.has(openDeal.id) ? "★" : "☆"}
                   </span>
                 </div>
+                {openDeal.restaurant && <div style={styles.dealSub}>{openDeal.restaurant}</div>}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                   {openDeal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden", border: "1px solid #000" }}>{openDeal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
                   <span style={styles.priceBadge}>{openDeal.price}</span>
                   {(openDeal.mealTimes || []).map(m => <span key={m} style={styles.badge}>{m}</span>)}
-                  <span style={styles.badge}>{openDeal.category}</span>
                   {openDeal.verified && <span style={styles.verified}>✓ Verified</span>}
                 </div>
                 {openDeal.imageUrl && (
                   <img src={openDeal.imageUrl} alt={openDeal.title} style={{ width: "100%", height: "auto", borderRadius: 10, marginBottom: 12, display: "block" }} />
                 )}
                 <div style={{ fontSize: 15, color: "var(--text)", marginBottom: 12, lineHeight: 1.6 }}>{openDeal.description}</div>
-                <div style={styles.metaRow}>
-                  <span>📍 {openDeal.restaurant}</span>
-                  <span>📏 {openDeal.distance}</span>
-                  <span>🕐 {openDeal.hours}</span>
-                </div>
                 {openDeal.days.length > 0 && (
                   <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                    {DAYS_SHORT.map(d => (
-                      <div key={d} style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--border)", fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center",
-                        background: openDeal.days.includes(d) ? "var(--accent-light)" : "var(--surface-2)",
-                        color: openDeal.days.includes(d) ? "var(--accent-dark)" : "var(--text-faint)",
-                        borderColor: openDeal.days.includes(d) ? "var(--accent)" : "var(--border)" }}>{d}</div>
+                    {DAYS_SHORT.filter(d => openDeal.days.includes(d)).map(d => (
+                      <div key={d} style={{ width: 30, height: 30, borderRadius: "50%", fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "var(--accent-light)", color: "var(--accent-dark)", border: "1px solid var(--accent)" }}>{d}</div>
                     ))}
                   </div>
                 )}
@@ -2053,9 +2047,9 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
                 style={{ fontSize: 12, color: "#e24b4a", cursor: "pointer", flexShrink: 0 }}>Delete</span>
             )}
           </div>
+          {deal.restaurant && <div style={styles.dealSub}>{deal.restaurant}</div>}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
             {(deal.mealTimes || []).map(m => <span key={m} style={styles.badge}>{m}</span>)}
-            <span style={styles.badge}>{deal.category}</span>
             {deal.verified && <span style={styles.verified}>✓ Verified</span>}
             {deal.expiredAt && <span style={styles.expiredBadge}>🚩 Expired {new Date(deal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
           </div>
