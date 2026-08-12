@@ -13,8 +13,30 @@ const mapDeal = (d) => ({
   normalPrice: d.normal_price,
   expiredAt: d.expired_at,
   imageUrl: d.image_url ?? null,
+  startTime: d.start_time ?? null,
+  endTime: d.end_time ?? null,
   comments: (d.comments || []).map(c => ({ ...c, user: c.username, votes: 0 })),
 });
+
+// Postgres `time` comes back as "16:00:00" — show it as "4:00 PM".
+const fmtTime = (t) => {
+  if (!t) return "";
+  const [h, m] = t.split(":");
+  const hr = Number(h);
+  return `${hr % 12 || 12}:${m} ${hr >= 12 ? "PM" : "AM"}`;
+};
+
+// End time is optional, so open-ended deals read "From 9:00 PM".
+const timeRange = (deal) => {
+  if (!deal.startTime) return "";
+  const start = fmtTime(deal.startTime);
+  return deal.endTime ? `${start} – ${fmtTime(deal.endTime)}` : `From ${start}`;
+};
+
+const mapsUrl = (deal) =>
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    [deal.restaurant, deal.address].filter(Boolean).join(" ")
+  )}`;
 
 const emailPrefix = (user) => user?.email?.split("@")[0] ?? "anonymous";
 const username = emailPrefix;
@@ -94,7 +116,7 @@ export default function App() {
   const [replyText, setReplyText] = useState("");
   const [postForm, setPostForm] = useState({
     title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "",
-    mealTimes: [], days: [], includes: []
+    mealTimes: [], days: [], includes: [], startTime: "", endTime: ""
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -598,6 +620,8 @@ export default function App() {
       mealTimes: deal.mealTimes || [],
       days: deal.days || [],
       includes: deal.includes || [],
+      startTime: (deal.startTime || "").slice(0, 5),
+      endTime: (deal.endTime || "").slice(0, 5),
     });
     setImageFile(null);
     setImagePreview(deal.imageUrl || null);
@@ -668,6 +692,8 @@ export default function App() {
           includes: postForm.includes,
           normal_price: postForm.normalPrice.trim() || null,
           address: postForm.address.trim() || null,
+          start_time: postForm.startTime || null,
+          end_time: postForm.endTime || null,
           lat,
           lng,
           ...(imageFile || imagePreview === null ? { image_url: imageUrl } : {}),
@@ -682,7 +708,7 @@ export default function App() {
       } else {
         setDeals(prev => prev.map(d => d.id === editingDealId ? mapDeal(data) : d));
         setEditingDealId(null);
-        setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTimes: [], days: [], includes: [] });
+        setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTimes: [], days: [], includes: [], startTime: "", endTime: "" });
         setImageFile(null);
         setImagePreview(null);
         setPostSuccess(true);
@@ -702,12 +728,12 @@ export default function App() {
         days: postForm.days,
         includes: postForm.includes,
         votes: 1,
-        distance: "near you",
-        hours: "See description",
         verified: false,
         normal_price: postForm.normalPrice.trim() || null,
         user_id: user.id,
         address: postForm.address.trim() || null,
+        start_time: postForm.startTime || null,
+        end_time: postForm.endTime || null,
         lat,
         lng,
         image_url: imageUrl,
@@ -719,7 +745,7 @@ export default function App() {
     } else if (data) {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
-      setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTimes: [], days: [], includes: [] });
+      setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTimes: [], days: [], includes: [], startTime: "", endTime: "" });
       setImageFile(null);
       setImagePreview(null);
       setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
@@ -769,7 +795,9 @@ export default function App() {
     dealBody: { flex: 1 },
     titleRow: { display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap", marginBottom: 4 },
     dealTitle: { fontSize: 15, fontWeight: 700, color: "var(--text)", lineHeight: 1.3 },
-    dealSub: { fontSize: 13, color: "var(--text-muted)", fontWeight: 600, marginBottom: 8 },
+    dealWhere: { fontSize: 12, color: "var(--accent-dark)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 },
+    timeRow: { fontSize: 13, color: "var(--text-muted)", marginTop: 10, fontWeight: 600 },
+    addressLink: { display: "inline-block", fontSize: 13, color: "var(--accent)", textDecoration: "none", marginTop: 6, fontWeight: 600 },
     priceBadge: { background: "#eaf3de", border: "1px solid #97c459", color: "#3b6d11", fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 20, whiteSpace: "nowrap" },
     badge: { background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-muted)", fontSize: 11, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap" },
     desc: { fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 8 },
@@ -1321,14 +1349,17 @@ export default function App() {
               </div>
               <div style={styles.dealBody}>
                 <div style={styles.titleRow}>
-                  <div style={{ ...styles.dealTitle, fontSize: 17, flex: 1 }}>{openDeal.title}</div>
+                  {/* Where leads, what sits directly under it, so the two read as one unit. */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {openDeal.restaurant && <div style={styles.dealWhere}>{openDeal.restaurant}</div>}
+                    <div style={{ ...styles.dealTitle, fontSize: 17 }}>{openDeal.title}</div>
+                  </div>
                   <span onClick={() => toggleSaveDeal(openDeal.id)}
                     title={savedDealIds.has(openDeal.id) ? "Unsave" : "Save"}
                     style={{ fontSize: 22, cursor: "pointer", flexShrink: 0, color: savedDealIds.has(openDeal.id) ? "var(--accent)" : "var(--text-faint)", lineHeight: 1 }}>
                     {savedDealIds.has(openDeal.id) ? "★" : "☆"}
                   </span>
                 </div>
-                {openDeal.restaurant && <div style={styles.dealSub}>{openDeal.restaurant}</div>}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                   {openDeal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden", border: "1px solid #000" }}>{openDeal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
                   <span style={styles.priceBadge}>{openDeal.price}</span>
@@ -1346,6 +1377,14 @@ export default function App() {
                         background: "var(--accent-light)", color: "var(--accent-dark)", border: "1px solid var(--accent)" }}>{d}</div>
                     ))}
                   </div>
+                )}
+                {timeRange(openDeal) && (
+                  <div style={styles.timeRow}>🕐 {timeRange(openDeal)}</div>
+                )}
+                {openDeal.address && (
+                  <a href={mapsUrl(openDeal)} target="_blank" rel="noopener noreferrer" style={styles.addressLink}>
+                    📍 {openDeal.address}
+                  </a>
                 )}
                 {openDeal.includes.length > 0 && (
                   <div style={styles.includesRow}>
@@ -1493,6 +1532,19 @@ export default function App() {
                 ))}
               </div>
             </div>
+            <div style={styles.row2}>
+              <div style={styles.field}>
+                <label style={styles.label}>Starts</label>
+                <input type="time" style={styles.textInput} value={postForm.startTime}
+                  onChange={e => setPostForm(p => ({ ...p, startTime: e.target.value }))} />
+              </div>
+              <div style={styles.field}>
+                <label style={styles.label}>Ends <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>(optional)</span></label>
+                <input type="time" style={styles.textInput} value={postForm.endTime}
+                  onChange={e => setPostForm(p => ({ ...p, endTime: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-faint)" }}>Leave the end time blank for deals that run until they sell out.</div>
           </div>
 
           <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
@@ -2033,6 +2085,7 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
           <button style={votedDeals[`${deal.id}-down`] ? styles.voteBtnDown : styles.voteBtn} onClick={() => onVote(deal.id, "down")}>▼</button>
         </div>
         <div style={styles.dealBody}>
+          {deal.restaurant && <div style={styles.dealWhere}>{deal.restaurant}</div>}
           <div style={styles.titleRow}>
             <span style={styles.dealTitle}>{deal.title}</span>
             {deal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden", border: "1px solid #000" }}>{deal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
@@ -2047,7 +2100,6 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
                 style={{ fontSize: 12, color: "#e24b4a", cursor: "pointer", flexShrink: 0 }}>Delete</span>
             )}
           </div>
-          {deal.restaurant && <div style={styles.dealSub}>{deal.restaurant}</div>}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
             {(deal.mealTimes || []).map(m => <span key={m} style={styles.badge}>{m}</span>)}
             {deal.verified && <span style={styles.verified}>✓ Verified</span>}
@@ -2058,6 +2110,7 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
             <img src={deal.imageUrl} alt={deal.title} style={{ width: "100%", height: "auto", borderRadius: 8, marginBottom: 8, display: "block" }} />
           )}
           <div style={styles.metaRow}>
+            {timeRange(deal) && <span>🕐 {timeRange(deal)}</span>}
             <span onClick={e => { e.stopPropagation(); setShowComments(s => !s); }} style={styles.commentToggle}>
               💬 {deal.comments.length} {deal.comments.length === 1 ? "comment" : "comments"}
             </span>
