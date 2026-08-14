@@ -62,8 +62,15 @@ const timeAgo = (ts) => {
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
-  return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const d = new Date(ts);
+  // Include the year once it's not the current one — on a site about what's live
+  // right now, a bare "Mar 3" reads the same whether it's recent or two years dead.
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
 };
+
+const fullDate = (ts) =>
+  ts ? new Date(ts).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
 
 const friendlyError = (error, fallback) => {
   const msg = error?.message || "";
@@ -841,6 +848,7 @@ export default function App() {
     // Fixed ratio keeps card heights predictable and stops the feed reflowing as images load.
     heroImg: { width: "100%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: 10, display: "block", marginBottom: 10, background: "var(--surface-2)" },
     photoCount: { position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20 },
+    postedRow: { fontSize: 12, color: "var(--text-faint)", marginTop: 10 },
     metaRow: { display: "flex", gap: 12, fontSize: 12, color: "var(--text-faint)", alignItems: "center", flexWrap: "wrap" },
     verified: { color: "#1d9e75", fontWeight: 600, fontSize: 11 },
     divider: { borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 },
@@ -1428,6 +1436,11 @@ export default function App() {
                   <a href={mapsUrl(openDeal)} target="_blank" rel="noopener noreferrer" style={styles.addressLink}>
                     📍 {openDeal.address}
                   </a>
+                )}
+                {openDeal.created_at && (
+                  <div style={styles.postedRow}>
+                    Posted {fullDate(openDeal.created_at)} · {timeAgo(openDeal.created_at)}
+                  </div>
                 )}
                 {openDeal.includes.length > 0 && (
                   <div style={styles.includesRow}>
@@ -2179,6 +2192,9 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
           )}
           <div style={styles.metaRow}>
             {timeRange(deal) && <span>🕐 {timeRange(deal)}</span>}
+            {deal.created_at && (
+              <span title={`Posted ${fullDate(deal.created_at)}`}>Posted {timeAgo(deal.created_at)}</span>
+            )}
             <span onClick={e => { e.stopPropagation(); setShowComments(s => !s); }} style={styles.commentToggle}>
               💬 {deal.comments.length} {deal.comments.length === 1 ? "comment" : "comments"}
             </span>
