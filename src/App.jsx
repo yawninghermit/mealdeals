@@ -13,6 +13,8 @@ const mapDeal = (d) => ({
   normalPrice: d.normal_price,
   expiredAt: d.expired_at,
   imageUrl: d.image_url ?? null,
+  // Rows predating multi-photo only have the single image_url, so fall back to it.
+  images: d.image_urls?.length ? d.image_urls : (d.image_url ? [d.image_url] : []),
   startTime: d.start_time ?? null,
   endTime: d.end_time ?? null,
   comments: (d.comments || []).map(c => ({ ...c, user: c.username, votes: 0 })),
@@ -88,6 +90,7 @@ const buildTree = (comments) => {
   return roots;
 };
 
+const MAX_PHOTOS = 5;
 const MEAL_TIMES = ["All", "Breakfast", "Lunch", "Dinner"];
 const DAYS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
@@ -118,8 +121,8 @@ export default function App() {
     title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "",
     mealTimes: [], days: [], includes: [], startTime: "", endTime: ""
   });
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  // One entry per photo: { file } for a pending upload, { url } for one already stored.
+  const [imageItems, setImageItems] = useState([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState(null);
   const imageInputRef = useRef(null);
@@ -483,8 +486,11 @@ export default function App() {
       return m ? m[1] : null;
     };
 
-    const { data: userDeals } = await supabase.from("deals").select("image_url").eq("user_id", user.id);
-    const dealImagePaths = (userDeals || []).map(d => extractPath(d.image_url, "deal-images")).filter(Boolean);
+    const { data: userDeals } = await supabase.from("deals").select("image_url, image_urls").eq("user_id", user.id);
+    // Cover both columns so multi-photo deals don't leave orphaned objects behind.
+    const dealImagePaths = [...new Set(
+      (userDeals || []).flatMap(d => [d.image_url, ...(d.image_urls || [])])
+    )].map(u => extractPath(u, "deal-images")).filter(Boolean);
     if (dealImagePaths.length > 0) {
       await supabase.storage.from("deal-images").remove(dealImagePaths);
     }
@@ -623,11 +629,35 @@ export default function App() {
       startTime: (deal.startTime || "").slice(0, 5),
       endTime: (deal.endTime || "").slice(0, 5),
     });
-    setImageFile(null);
-    setImagePreview(deal.imageUrl || null);
+    setImageItems((deal.images || []).map(url => ({ url })));
     setPostError("");
     setEditingDealId(deal.id);
     setScreen("post");
+  };
+
+  const addPhotos = (files) => {
+    if (files.length === 0) return;
+    const room = MAX_PHOTOS - imageItems.length;
+    if (room <= 0) return;
+    if (files.length > room) {
+      setImageError(`You can add up to ${MAX_PHOTOS} photos — only the first ${room} were added.`);
+    } else {
+      setImageError(null);
+    }
+    setImageItems(prev => [
+      ...prev,
+      ...files.slice(0, room).map(file => ({ file, previewUrl: URL.createObjectURL(file) })),
+    ]);
+  };
+
+  const removePhoto = (index) => {
+    setImageItems(prev => {
+      const item = prev[index];
+      // Only object URLs need releasing; stored photos are plain remote URLs.
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+    setImageError(null);
   };
 
   const uploadDealImage = async (file) => {
@@ -673,11 +703,16 @@ export default function App() {
       lat = null; lng = null;
     }
 
-    let imageUrl = imagePreview && !imageFile ? imagePreview : null;
-    if (imageFile) {
-      imageUrl = await uploadDealImage(imageFile);
-      if (!imageUrl) return;
+    // Existing photos keep their URL; newly picked ones upload in order so the
+    // gallery stays in the sequence the poster arranged.
+    const imageUrls = [];
+    for (const item of imageItems) {
+      if (item.url) { imageUrls.push(item.url); continue; }
+      const uploaded = await uploadDealImage(item.file);
+      if (!uploaded) return;
+      imageUrls.push(uploaded);
     }
+    const imageUrl = imageUrls[0] ?? null;
 
     if (editingDealId) {
       const { data, error } = await supabase
@@ -696,7 +731,8 @@ export default function App() {
           end_time: postForm.endTime || null,
           lat,
           lng,
-          ...(imageFile || imagePreview === null ? { image_url: imageUrl } : {}),
+          image_urls: imageUrls,
+          image_url: imageUrl,
         })
         .eq("id", editingDealId)
         .select("*, comments(*)")
@@ -709,8 +745,7 @@ export default function App() {
         setDeals(prev => prev.map(d => d.id === editingDealId ? mapDeal(data) : d));
         setEditingDealId(null);
         setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTimes: [], days: [], includes: [], startTime: "", endTime: "" });
-        setImageFile(null);
-        setImagePreview(null);
+        setImageItems([]);
         setPostSuccess(true);
         setTimeout(() => { setPostSuccess(false); setScreen("deal"); }, 1800);
       }
@@ -736,6 +771,7 @@ export default function App() {
         end_time: postForm.endTime || null,
         lat,
         lng,
+        image_urls: imageUrls,
         image_url: imageUrl,
       })
       .select("*, comments(*)")
@@ -746,8 +782,7 @@ export default function App() {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
       setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTimes: [], days: [], includes: [], startTime: "", endTime: "" });
-      setImageFile(null);
-      setImagePreview(null);
+      setImageItems([]);
       setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
     }
   };
@@ -805,6 +840,7 @@ export default function App() {
     descClamp: { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
     // Fixed ratio keeps card heights predictable and stops the feed reflowing as images load.
     heroImg: { width: "100%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: 10, display: "block", marginBottom: 10, background: "var(--surface-2)" },
+    photoCount: { position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20 },
     metaRow: { display: "flex", gap: 12, fontSize: 12, color: "var(--text-faint)", alignItems: "center", flexWrap: "wrap" },
     verified: { color: "#1d9e75", fontWeight: 600, fontSize: 11 },
     divider: { borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 },
@@ -1370,9 +1406,10 @@ export default function App() {
                   {(openDeal.mealTimes || []).map(m => <span key={m} style={styles.badge}>{m}</span>)}
                   {openDeal.verified && <span style={styles.verified}>✓ Verified</span>}
                 </div>
-                {openDeal.imageUrl && (
-                  <img src={openDeal.imageUrl} alt={openDeal.title} style={{ width: "100%", height: "auto", borderRadius: 10, marginBottom: 12, display: "block" }} />
-                )}
+                {openDeal.images.map((src, i) => (
+                  <img key={src} src={src} alt={`${openDeal.title} photo ${i + 1}`} loading={i === 0 ? undefined : "lazy"}
+                    style={{ width: "100%", height: "auto", borderRadius: 10, marginBottom: 12, display: "block" }} />
+                ))}
                 <div style={{ fontSize: 15, color: "var(--text)", marginBottom: 12, lineHeight: 1.6 }}>{openDeal.description}</div>
                 {openDeal.days.length > 0 && (
                   <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
@@ -1471,35 +1508,51 @@ export default function App() {
                 <input style={styles.textInput} placeholder="e.g. $7, $1/slice, 50% off" value={postForm.price} onChange={e => { const v = e.target.value; setPostForm(p => ({ ...p, price: v && !v.startsWith("$") ? "$" + v : v })); }} />
               </div>
               <div style={styles.field}>
-                <label style={styles.label}>Normal price</label>
-                <input style={styles.textInput} placeholder="$0.00 (shows savings)" value={postForm.normalPrice} onChange={e => { const v = e.target.value; setPostForm(p => ({ ...p, normalPrice: v && !v.startsWith("$") ? "$" + v : v })); }} />
+                <label style={styles.label}>Normal price <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>(optional)</span></label>
+                <input style={styles.textInput} placeholder="$0.00 (shows savings)" inputMode="decimal"
+                  value={postForm.normalPrice}
+                  onChange={e => {
+                    // Digits and a single decimal point only — this one feeds the savings comparison.
+                    const digits = e.target.value.replace(/[^0-9.]/g, "");
+                    const [whole, ...rest] = digits.split(".");
+                    const clean = rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
+                    setPostForm(p => ({ ...p, normalPrice: clean ? "$" + clean : "" }));
+                  }} />
               </div>
             </div>
           </div>
 
           <div style={styles.formCard}>
-            <div style={styles.sectionLabel}>Photo <span style={{ color: "var(--text-faint)", fontWeight: 400, textTransform: "none", fontSize: 11 }}>(optional)</span></div>
-            {imagePreview ? (
-              <div style={{ position: "relative", marginBottom: 12 }}>
-                <img src={imagePreview} alt="Deal preview" style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 10, display: "block" }} />
-                <button onClick={() => { setImageFile(null); setImagePreview(null); if (imageInputRef.current) imageInputRef.current.value = ""; }}
-                  style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.55)", border: "none", color: "#fff", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            <div style={styles.sectionLabel}>Photos <span style={{ color: "var(--text-faint)", fontWeight: 400, textTransform: "none", fontSize: 11 }}>(optional — up to {MAX_PHOTOS})</span></div>
+            {imageItems.length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 8, marginBottom: 10 }}>
+                {imageItems.map((item, i) => (
+                  <div key={item.url || item.previewUrl} style={{ position: "relative" }}>
+                    <img src={item.url || item.previewUrl} alt={`Deal photo ${i + 1}`}
+                      style={{ width: "100%", aspectRatio: "1 / 1", objectFit: "cover", borderRadius: 8, display: "block" }} />
+                    {i === 0 && (
+                      <span style={{ position: "absolute", bottom: 4, left: 4, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 20 }}>Cover</span>
+                    )}
+                    <button onClick={() => removePhoto(i)} aria-label={`Remove photo ${i + 1}`}
+                      style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.55)", border: "none", color: "#fff", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                  </div>
+                ))}
               </div>
-            ) : (
+            )}
+            {imageItems.length < MAX_PHOTOS && (
               <div onClick={() => imageInputRef.current?.click()}
                 style={{ border: "1.5px dashed var(--border)", borderRadius: 10, padding: "24px 16px", textAlign: "center", cursor: "pointer", background: "var(--surface-2)", marginBottom: 4 }}>
                 <div style={{ fontSize: 28, marginBottom: 6 }}>📷</div>
-                <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 600 }}>Tap to add a photo</div>
-                <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>Take a picture or choose from your library</div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 600 }}>
+                  {imageItems.length === 0 ? "Tap to add photos" : `Add another (${imageItems.length}/${MAX_PHOTOS})`}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>The first photo is used as the cover</div>
               </div>
             )}
-            <input ref={imageInputRef} type="file" accept="image/*" style={{ display: "none" }}
+            <input ref={imageInputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
               onChange={e => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setImageFile(file);
-                setImagePreview(URL.createObjectURL(file));
-                setImageError(null);
+                addPhotos(Array.from(e.target.files || []));
+                if (imageInputRef.current) imageInputRef.current.value = "";
               }} />
             {imageError && <div style={{ fontSize: 12, color: "#e24b4a", marginTop: 6 }}>{imageError}</div>}
           </div>
@@ -2113,8 +2166,13 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
             {deal.verified && <span style={styles.verified}>✓ Verified</span>}
             {deal.expiredAt && <span style={styles.expiredBadge}>🚩 Expired {new Date(deal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
           </div>
-          {deal.imageUrl && (
-            <img src={deal.imageUrl} alt={deal.title} loading="lazy" style={styles.heroImg} />
+          {deal.images.length > 0 && (
+            <div style={{ position: "relative" }}>
+              <img src={deal.images[0]} alt={deal.title} loading="lazy" style={styles.heroImg} />
+              {deal.images.length > 1 && (
+                <span style={styles.photoCount}>📷 {deal.images.length}</span>
+              )}
+            </div>
           )}
           {deal.description && (
             <div style={{ ...styles.desc, ...styles.descClamp }}>{deal.description}</div>
