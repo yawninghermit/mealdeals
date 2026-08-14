@@ -17,6 +17,8 @@ const mapDeal = (d) => ({
   images: d.image_urls?.length ? d.image_urls : (d.image_url ? [d.image_url] : []),
   startTime: d.start_time ?? null,
   endTime: d.end_time ?? null,
+  lastConfirmedAt: d.last_confirmed_at ?? null,
+  confirmCount: d.confirm_count ?? 0,
   comments: (d.comments || []).map(c => ({ ...c, user: c.username, votes: 0 })),
 });
 
@@ -71,6 +73,14 @@ const timeAgo = (ts) => {
 
 const fullDate = (ts) =>
   ts ? new Date(ts).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
+
+// How long a deal coasts on its last confirmation before we stop vouching for it.
+const STALE_AFTER_DAYS = 45;
+const daysSince = (ts) => (ts ? (Date.now() - new Date(ts)) / 86400000 : Infinity);
+
+// A confirmation is stronger evidence than the post date, so it wins when present.
+const freshnessAt = (deal) => deal.lastConfirmedAt || deal.created_at;
+const isStale = (deal) => !deal.expiredAt && daysSince(freshnessAt(deal)) > STALE_AFTER_DAYS;
 
 const friendlyError = (error, fallback) => {
   const msg = error?.message || "";
@@ -128,6 +138,9 @@ export default function App() {
     title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "",
     mealTimes: [], days: [], includes: [], startTime: "", endTime: ""
   });
+  // Session-scoped, purely so the button can read "Confirmed" after a tap.
+  // The authoritative timestamp and count come back from the server.
+  const [confirmedDealIds, setConfirmedDealIds] = useState(() => new Set());
   // One entry per photo: { file } for a pending upload, { url } for one already stored.
   const [imageItems, setImageItems] = useState([]);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -572,6 +585,28 @@ export default function App() {
     }
   };
 
+  const handleConfirmDeal = async (deal) => {
+    if (!user) { setAuthModal("login"); return; }
+    const prevDeals = deals;
+    const alreadyConfirmed = confirmedDealIds.has(deal.id);
+    const now = new Date().toISOString();
+
+    setDeals(prev => prev.map(d => d.id === deal.id
+      ? { ...d, lastConfirmedAt: now, confirmCount: d.confirmCount + (alreadyConfirmed ? 0 : 1) }
+      : d));
+    setConfirmedDealIds(prev => new Set(prev).add(deal.id));
+
+    const { error } = await supabase.rpc("confirm_deal", { p_deal_id: deal.id });
+    if (error) {
+      setDeals(prevDeals);
+      setConfirmedDealIds(prev => {
+        const next = new Set(prev);
+        if (!alreadyConfirmed) next.delete(deal.id);
+        return next;
+      });
+    }
+  };
+
   const handleToggleExpired = async (deal) => {
     const newVal = deal.expiredAt ? null : new Date().toISOString();
     const { error } = await supabase.from("deals").update({ expired_at: newVal }).eq("id", deal.id);
@@ -849,6 +884,8 @@ export default function App() {
     heroImg: { width: "100%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: 10, display: "block", marginBottom: 10, background: "var(--surface-2)" },
     photoCount: { position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20 },
     postedRow: { fontSize: 12, color: "var(--text-faint)", marginTop: 10 },
+    confirmBox: { display: "flex", alignItems: "center", gap: 12, marginTop: 12, padding: "12px 14px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 12 },
+    staleBadge: { background: "#fff6e5", border: "1px solid #e0a52e", color: "#8a5d00", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap" },
     metaRow: { display: "flex", gap: 12, fontSize: 12, color: "var(--text-faint)", alignItems: "center", flexWrap: "wrap" },
     verified: { color: "#1d9e75", fontWeight: 600, fontSize: 11 },
     divider: { borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 },
@@ -1440,6 +1477,34 @@ export default function App() {
                 {openDeal.created_at && (
                   <div style={styles.postedRow}>
                     Posted {fullDate(openDeal.created_at)} · {timeAgo(openDeal.created_at)}
+                  </div>
+                )}
+                {!openDeal.expiredAt && (
+                  <div style={styles.confirmBox}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {openDeal.lastConfirmedAt ? (
+                        <>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-dark)" }}>
+                            ✓ Still running as of {timeAgo(openDeal.lastConfirmedAt)}
+                          </div>
+                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                            Confirmed by {openDeal.confirmCount} {openDeal.confirmCount === 1 ? "person" : "people"}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Nobody's confirmed this yet</div>
+                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                            Been recently? Let people know it's still on.
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <button
+                      style={{ ...styles.btn, fontSize: 13, whiteSpace: "nowrap", ...(confirmedDealIds.has(openDeal.id) ? { color: "var(--accent-dark)", borderColor: "var(--accent)" } : {}) }}
+                      onClick={() => handleConfirmDeal(openDeal)}>
+                      {confirmedDealIds.has(openDeal.id) ? "✓ Confirmed" : "Still here?"}
+                    </button>
                   </div>
                 )}
                 {openDeal.includes.length > 0 && (
@@ -2258,6 +2323,7 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
             {(deal.mealTimes || []).map(m => <span key={m} style={styles.badge}>{m}</span>)}
             {deal.verified && <span style={styles.verified}>✓ Verified</span>}
             {deal.expiredAt && <span style={styles.expiredBadge}>🚩 Expired {new Date(deal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
+            {isStale(deal) && <span style={styles.staleBadge}>Unconfirmed since {timeAgo(freshnessAt(deal))}</span>}
           </div>
           {deal.images.length > 0 && (
             <div style={{ position: "relative" }}>
@@ -2272,7 +2338,12 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
           )}
           <div style={styles.metaRow}>
             {timeRange(deal) && <span>🕐 {timeRange(deal)}</span>}
-            {deal.created_at && (
+            {deal.lastConfirmedAt ? (
+              <span style={{ color: "var(--accent-dark)", fontWeight: 600 }}
+                title={`Confirmed still running by ${deal.confirmCount} ${deal.confirmCount === 1 ? "person" : "people"}`}>
+                ✓ Confirmed {timeAgo(deal.lastConfirmedAt)}
+              </span>
+            ) : deal.created_at && (
               <span title={`Posted ${fullDate(deal.created_at)}`}>Posted {timeAgo(deal.created_at)}</span>
             )}
             <span onClick={e => { e.stopPropagation(); setShowComments(s => !s); }} style={styles.commentToggle}>
