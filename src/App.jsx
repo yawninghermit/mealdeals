@@ -1629,6 +1629,84 @@ export default function App() {
       )}
 
       {/* PRIVACY POLICY */}
+      {/* ABOUT */}
+      {screen === "about" && (
+        <div style={styles.page}>
+          <button style={styles.backBtn} onClick={() => setScreen("home")}>← Back</button>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 12, marginBottom: 20 }}>About ih8fullprice</div>
+
+          <div style={{ ...styles.policyText, fontSize: 16, color: "var(--text)" }}>
+            We're people who genuinely love finding a good deal on good food — and who got tired of
+            never being able to trust what we'd heard.
+          </div>
+
+          <div style={styles.policyH2}>The problem</div>
+          <div style={styles.policyText}>
+            Food deals come and go without warning. A place runs half-price wings every Wednesday for
+            two years, then quietly stops, and the only way you find out is by showing up hungry and
+            paying full price. A new spot starts a $3 taco night and nobody hears about it for months.
+            The deal you read about online might have ended last spring — the page never said so, because
+            nobody ever goes back to update these things.
+          </div>
+          <div style={styles.policyText}>
+            There is no source of truth for any of this. Restaurants change their specials whenever they
+            want, and they have no obligation to announce it. Listicles and review sites go stale the day
+            after they're published and stay up forever. The only people who actually know what's running
+            right now are the people who were just there.
+          </div>
+
+          <div style={styles.policyH2}>What we're building</div>
+          <div style={styles.policyText}>
+            ih8fullprice is a community-driven answer to that. Instead of one publisher trying and failing
+            to keep track of every restaurant in town, it's everyone who eats out keeping track together.
+            You post the deal you found. Someone else confirms it's still running, or flags that it's
+            over. Every visit somebody makes turns into information the next person can use.
+          </div>
+          <div style={styles.policyText}>
+            Deals that have ended matter as much as deals that are live. Knowing a special is dead saves
+            you a wasted trip, and it's the part every other source gets wrong — they'll tell you about
+            the good times and go silent when they end. Here, marking a deal expired is a contribution,
+            not a deletion.
+          </div>
+
+          <div style={styles.policyH2}>Why this is good for restaurants too</div>
+          <div style={styles.policyText}>
+            A great deal is worth nothing if nobody knows about it. Plenty of places run genuinely good
+            specials that never reach past their own regulars, while the spot down the street gets a
+            crowd because it happens to have a louder sign. We'd rather that competition be settled on
+            whether the deal is actually good.
+          </div>
+          <div style={styles.policyText}>
+            When people can see what everyone in the area is offering side by side, restaurants have a
+            real reason to make their specials better — and the ones already doing right by their
+            customers finally get credit for it. Good deals get found, word travels, and a restaurant
+            that treats people well ends up busier for it.
+          </div>
+
+          <div style={styles.policyH2}>How you can help</div>
+          <ul style={styles.policyList}>
+            <li><strong>Post what you find.</strong> A deal nobody knows about may as well not exist.</li>
+            <li><strong>Say when something's over.</strong> Marking a dead deal expired saves the next person a trip.</li>
+            <li><strong>Add the details that matter.</strong> The days, the hours, the catch — dine-in only, one per person, ends at 10. That's usually what decides whether a deal is worth going for.</li>
+            <li><strong>Vote and comment.</strong> Tell people whether it lived up to it, and whether the portion was worth the price.</li>
+          </ul>
+
+          <div style={styles.policyH2}>Get in touch</div>
+          <div style={styles.policyText}>
+            Questions, corrections, or a restaurant that wants their deal listed — email{" "}
+            <a href="mailto:mealdeals12@gmail.com" style={{ color: "var(--accent)" }}>mealdeals12@gmail.com</a>.
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 24, flexWrap: "wrap" }}>
+            <button style={{ ...styles.btnPrimary, fontSize: 15 }} onClick={() => setScreen("home")}>Browse deals →</button>
+            <button style={{ ...styles.btn, padding: "12px 20px", fontSize: 14 }}
+              onClick={() => user ? setScreen("post") : setAuthModal("login")}>
+              Post a deal
+            </button>
+          </div>
+        </div>
+      )}
+
       {screen === "privacy" && (
         <div style={styles.page}>
           <button style={styles.backBtn} onClick={() => setScreen("home")}>← Back</button>
@@ -1779,6 +1857,8 @@ export default function App() {
 
       {/* Footer */}
       <div style={{ marginTop: 40, padding: "18px 16px 24px", borderTop: "1px solid var(--border)", display: "flex", gap: 14, justifyContent: "center", alignItems: "center", fontSize: 12, color: "var(--text-faint)", flexWrap: "wrap" }}>
+        <span style={{ cursor: "pointer", color: screen === "about" ? "var(--accent)" : "var(--text-faint)" }} onClick={() => setScreen("about")}>About</span>
+        <span>·</span>
         <span style={{ cursor: "pointer", color: screen === "privacy" ? "var(--accent)" : "var(--text-faint)" }} onClick={() => setScreen("privacy")}>Privacy</span>
         <span>·</span>
         <span style={{ cursor: "pointer", color: screen === "terms" ? "var(--accent)" : "var(--text-faint)" }} onClick={() => setScreen("terms")}>Terms</span>
