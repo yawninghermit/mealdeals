@@ -7,14 +7,74 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+const MAX_DEAL_IMAGES = 5;
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+// Deals posted before the multi-photo migration only have `image_url`, so fall
+// back to it when `image_urls` is empty — no need to special-case old rows.
+const dealImageUrls = (d) =>
+  d.image_urls?.length ? d.image_urls : d.image_url ? [d.image_url] : [];
+
 const mapDeal = (d) => ({
   ...d,
   mealTimes: d.meal_times || [],
   normalPrice: d.normal_price,
   expiredAt: d.expired_at,
   imageUrl: d.image_url ?? null,
+  imageUrls: dealImageUrls(d),
   comments: (d.comments || []).map(c => ({ ...c, user: c.username, votes: 0 })),
 });
+
+// Strips anything that isn't a number out of a price field, allowing a single
+// decimal point and at most two places after it. Returns the bare number with
+// no currency symbol; callers add the "$".
+const sanitizeMoney = (raw) => {
+  const cleaned = String(raw).replace(/[^0-9.]/g, "");
+  const [whole = "", ...rest] = cleaned.split(".");
+  return rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
+};
+
+const validateImageFile = (file) => {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) return "Photos must be JPEG, PNG, WebP or GIF.";
+  if (file.size > MAX_IMAGE_BYTES) return "Each photo must be under 8 MB.";
+  return null;
+};
+
+// Horizontally swipeable photo strip. Falls back to a plain <img> for a single
+// photo so the common case stays a single element with no scroll container.
+const ImageGallery = ({ urls, alt, height = 220, radius = 10 }) => {
+  const [active, setActive] = useState(0);
+  if (!urls?.length) return null;
+  if (urls.length === 1) {
+    return <img src={urls[0]} alt={alt} style={{ width: "100%", height: "auto", borderRadius: radius, marginBottom: 12, display: "block" }} />;
+  }
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div
+        onScroll={e => {
+          const el = e.currentTarget;
+          setActive(Math.round(el.scrollLeft / Math.max(el.clientWidth, 1)));
+        }}
+        style={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", borderRadius: radius, scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+      >
+        {urls.map((u, i) => (
+          <img
+            key={u}
+            src={u}
+            alt={`${alt} — photo ${i + 1} of ${urls.length}`}
+            style={{ flex: "0 0 100%", width: "100%", height, objectFit: "cover", scrollSnapAlign: "start", display: "block" }}
+          />
+        ))}
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 8 }}>
+        {urls.map((u, i) => (
+          <span key={u} style={{ width: 6, height: 6, borderRadius: "50%", background: i === active ? "var(--accent)" : "var(--border)", transition: "background 0.15s" }} />
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const emailPrefix = (user) => user?.email?.split("@")[0] ?? "anonymous";
 const username = emailPrefix;
@@ -97,8 +157,9 @@ export default function MealDeals() {
     title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "",
     mealTimes: [], days: [], includes: []
   });
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  // Each entry is { id, url, file? }. `file` is set only for photos picked in
+  // this session and not yet uploaded; `url` is then an object URL for preview.
+  const [images, setImages] = useState([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState(null);
   const imageInputRef = useRef(null);
@@ -462,8 +523,13 @@ export default function MealDeals() {
       return m ? m[1] : null;
     };
 
-    const { data: userDeals } = await supabase.from("deals").select("image_url").eq("user_id", user.id);
-    const dealImagePaths = (userDeals || []).map(d => extractPath(d.image_url, "deal-images")).filter(Boolean);
+    const { data: userDeals } = await supabase.from("deals").select("image_url, image_urls").eq("user_id", user.id);
+    const dealImagePaths = [...new Set(
+      (userDeals || [])
+        .flatMap(d => [d.image_url, ...(d.image_urls || [])])
+        .map(u => extractPath(u, "deal-images"))
+        .filter(Boolean)
+    )];
     if (dealImagePaths.length > 0) {
       await supabase.storage.from("deal-images").remove(dealImagePaths);
     }
@@ -588,6 +654,11 @@ export default function MealDeals() {
     return null;
   };
 
+  // Object URLs leak until revoked, so drop them whenever a preview goes away.
+  const revokePreviews = (list) => list.forEach(i => { if (i.file) URL.revokeObjectURL(i.url); });
+
+  const clearImages = () => { revokePreviews(images); setImages([]); };
+
   const openEditDeal = (deal) => {
     setPostForm({
       title: deal.title,
@@ -600,34 +671,74 @@ export default function MealDeals() {
       days: deal.days || [],
       includes: deal.includes || [],
     });
-    setImageFile(null);
-    setImagePreview(deal.imageUrl || null);
+    revokePreviews(images);
+    setImages((deal.imageUrls || []).map(url => ({ id: crypto.randomUUID(), url })));
+    setImageError(null);
     setPostError("");
     setEditingDealId(deal.id);
     setScreen("post");
   };
 
-  const uploadDealImage = async (file) => {
-    if (!file.type.startsWith("image/")) {
-      setImageError("Please choose an image file.");
-      return null;
+  const removeImage = (id) => {
+    const target = images.find(i => i.id === id);
+    if (target?.file) URL.revokeObjectURL(target.url);
+    setImages(prev => prev.filter(i => i.id !== id));
+  };
+
+  const addImages = (fileList) => {
+    const picked = Array.from(fileList || []);
+    if (!picked.length) return;
+    setImageError(null);
+    const room = MAX_DEAL_IMAGES - images.length;
+    if (room <= 0) {
+      setImageError(`You can add up to ${MAX_DEAL_IMAGES} photos.`);
+      return;
     }
-    if (file.size > 8 * 1024 * 1024) {
-      setImageError("Image must be under 8 MB.");
+    const accepted = [];
+    let rejection = null;
+    for (const file of picked.slice(0, room)) {
+      const problem = validateImageFile(file);
+      if (problem) { rejection = problem; continue; }
+      accepted.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) });
+    }
+    if (picked.length > room) rejection = `You can only add ${MAX_DEAL_IMAGES} photos in total.`;
+    if (rejection) setImageError(rejection);
+    if (accepted.length) setImages(prev => [...prev, ...accepted]);
+  };
+
+  const uploadDealImage = async (file) => {
+    const problem = validateImageFile(file);
+    if (problem) {
+      setImageError(problem);
       return null;
     }
     const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-    const path = `${user.id}/${Date.now()}.${ext}`;
-    setUploadingImage(true);
-    setImageError(null);
-    const { error } = await supabase.storage.from("deal-images").upload(path, file, { upsert: true, contentType: file.type });
-    setUploadingImage(false);
+    // A timestamp alone collides when several photos upload in the same
+    // millisecond, which with upsert would silently overwrite the earlier one.
+    const path = `${user.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from("deal-images").upload(path, file, { upsert: false, contentType: file.type });
     if (error) {
       setImageError(`Upload failed: ${error.message}`);
       return null;
     }
     const { data } = supabase.storage.from("deal-images").getPublicUrl(path);
     return data.publicUrl;
+  };
+
+  // Uploads anything newly picked and returns the full ordered URL list, or
+  // null if any upload failed (so the caller can abort without saving).
+  const resolveImageUrls = async () => {
+    if (!images.some(i => i.file)) return images.map(i => i.url);
+    setUploadingImage(true);
+    const urls = [];
+    for (const img of images) {
+      if (!img.file) { urls.push(img.url); continue; }
+      const url = await uploadDealImage(img.file);
+      if (!url) { setUploadingImage(false); return null; }
+      urls.push(url);
+    }
+    setUploadingImage(false);
+    return urls;
   };
 
   const handlePostDeal = async () => {
@@ -650,11 +761,11 @@ export default function MealDeals() {
       lat = null; lng = null;
     }
 
-    let imageUrl = imagePreview && !imageFile ? imagePreview : null;
-    if (imageFile) {
-      imageUrl = await uploadDealImage(imageFile);
-      if (!imageUrl) return;
-    }
+    const imageUrls = await resolveImageUrls();
+    if (imageUrls === null) return;
+    // image_url stays mirrored to the first photo: middleware.js reads it to
+    // build og:image for shared links.
+    const coverUrl = imageUrls[0] ?? null;
 
     if (editingDealId) {
       const { data, error } = await supabase
@@ -671,7 +782,8 @@ export default function MealDeals() {
           address: postForm.address.trim() || null,
           lat,
           lng,
-          ...(imageFile || imagePreview === null ? { image_url: imageUrl } : {}),
+          image_urls: imageUrls,
+          image_url: coverUrl,
         })
         .eq("id", editingDealId)
         .select("*, comments(*)")
@@ -684,8 +796,7 @@ export default function MealDeals() {
         setDeals(prev => prev.map(d => d.id === editingDealId ? mapDeal(data) : d));
         setEditingDealId(null);
         setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTimes: [], days: [], includes: [] });
-        setImageFile(null);
-        setImagePreview(null);
+        clearImages();
         setPostSuccess(true);
         setTimeout(() => { setPostSuccess(false); setScreen("deal"); }, 1800);
       }
@@ -711,7 +822,8 @@ export default function MealDeals() {
         address: postForm.address.trim() || null,
         lat,
         lng,
-        image_url: imageUrl,
+        image_urls: imageUrls,
+        image_url: coverUrl,
       })
       .select("*, comments(*)")
       .single();
@@ -721,8 +833,7 @@ export default function MealDeals() {
       setDeals(prev => [mapDeal(data), ...prev]);
       setPostSuccess(true);
       setPostForm({ title: "", restaurant: "", address: "", price: "", normalPrice: "", description: "", mealTimes: [], days: [], includes: [] });
-      setImageFile(null);
-      setImagePreview(null);
+      clearImages();
       setTimeout(() => { setPostSuccess(false); setScreen("home"); }, 1800);
     }
   };
@@ -1354,9 +1465,8 @@ export default function MealDeals() {
                   <span style={styles.badge}>{openDeal.category}</span>
                   {openDeal.verified && <span style={styles.verified}>✓ Verified</span>}
                 </div>
-                {openDeal.imageUrl && (
-                  <img src={openDeal.imageUrl} alt={openDeal.title} style={{ width: "100%", height: "auto", borderRadius: 10, marginBottom: 12, display: "block" }} />
-                )}
+                <ImageGallery urls={openDeal.imageUrls} alt={openDeal.title} />
+
                 <div style={{ fontSize: 15, color: "var(--text)", marginBottom: 12, lineHeight: 1.6 }}>{openDeal.description}</div>
                 <div style={styles.metaRow}>
                   <span>📍 {openDeal.restaurant}</span>
@@ -1452,35 +1562,64 @@ export default function MealDeals() {
                 <input style={styles.textInput} placeholder="e.g. $7, $1/slice, 50% off" value={postForm.price} onChange={e => { const v = e.target.value; setPostForm(p => ({ ...p, price: v && !v.startsWith("$") ? "$" + v : v })); }} />
               </div>
               <div style={styles.field}>
-                <label style={styles.label}>Normal price</label>
-                <input style={styles.textInput} placeholder="$0.00 (shows savings)" value={postForm.normalPrice} onChange={e => { const v = e.target.value; setPostForm(p => ({ ...p, normalPrice: v && !v.startsWith("$") ? "$" + v : v })); }} />
+                <label style={styles.label}>
+                  Normal price <span style={{ color: "var(--text-faint)", fontWeight: 400, textTransform: "none", fontSize: 11 }}>(optional)</span>
+                </label>
+                <input
+                  style={styles.textInput}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="$0.00 (shows savings)"
+                  value={postForm.normalPrice}
+                  onChange={e => {
+                    const body = sanitizeMoney(e.target.value);
+                    setPostForm(p => ({ ...p, normalPrice: body ? "$" + body : "" }));
+                  }}
+                />
               </div>
             </div>
           </div>
 
           <div style={styles.formCard}>
-            <div style={styles.sectionLabel}>Photo <span style={{ color: "var(--text-faint)", fontWeight: 400, textTransform: "none", fontSize: 11 }}>(optional)</span></div>
-            {imagePreview ? (
-              <div style={{ position: "relative", marginBottom: 12 }}>
-                <img src={imagePreview} alt="Deal preview" style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 10, display: "block" }} />
-                <button onClick={() => { setImageFile(null); setImagePreview(null); if (imageInputRef.current) imageInputRef.current.value = ""; }}
-                  style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.55)", border: "none", color: "#fff", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-              </div>
-            ) : (
-              <div onClick={() => imageInputRef.current?.click()}
-                style={{ border: "1.5px dashed var(--border)", borderRadius: 10, padding: "24px 16px", textAlign: "center", cursor: "pointer", background: "var(--surface-2)", marginBottom: 4 }}>
-                <div style={{ fontSize: 28, marginBottom: 6 }}>📷</div>
-                <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 600 }}>Tap to add a photo</div>
-                <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>Take a picture or choose from your library</div>
+            <div style={styles.sectionLabel}>
+              Photos <span style={{ color: "var(--text-faint)", fontWeight: 400, textTransform: "none", fontSize: 11 }}>(optional — up to {MAX_DEAL_IMAGES})</span>
+            </div>
+            {images.length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8, marginBottom: 12 }}>
+                {images.map((img, i) => (
+                  <div key={img.id} style={{ position: "relative", aspectRatio: "1 / 1" }}>
+                    <img src={img.url} alt={`Deal preview ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10, display: "block" }} />
+                    {i === 0 && (
+                      <span style={{ position: "absolute", bottom: 4, left: 4, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 20 }}>Cover</span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`Remove photo ${i + 1}`}
+                      onClick={() => removeImage(img.id)}
+                      style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.55)", border: "none", color: "#fff", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    >✕</button>
+                  </div>
+                ))}
               </div>
             )}
-            <input ref={imageInputRef} type="file" accept="image/*" style={{ display: "none" }}
+            {images.length < MAX_DEAL_IMAGES && (
+              <div onClick={() => imageInputRef.current?.click()}
+                style={{ border: "1.5px dashed var(--border)", borderRadius: 10, padding: images.length ? "14px 16px" : "24px 16px", textAlign: "center", cursor: "pointer", background: "var(--surface-2)", marginBottom: 4 }}>
+                <div style={{ fontSize: images.length ? 20 : 28, marginBottom: 6 }}>📷</div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 600 }}>
+                  {images.length ? "Add another photo" : "Tap to add photos"}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
+                  {images.length
+                    ? `${MAX_DEAL_IMAGES - images.length} more allowed — the first photo is the cover`
+                    : "Take a picture or choose from your library"}
+                </div>
+              </div>
+            )}
+            <input ref={imageInputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
               onChange={e => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setImageFile(file);
-                setImagePreview(URL.createObjectURL(file));
-                setImageError(null);
+                addImages(e.target.files);
+                e.target.value = "";
               }} />
             {imageError && <div style={{ fontSize: 12, color: "#e24b4a", marginTop: 6 }}>{imageError}</div>}
           </div>
@@ -2080,8 +2219,15 @@ function DealCard({ deal, styles, votedDeals, onVote, onClick, canDelete, onDele
             {deal.expiredAt && <span style={styles.expiredBadge}>🚩 Expired {new Date(deal.expiredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
           </div>
           <div style={styles.desc}>{deal.description}</div>
-          {deal.imageUrl && (
-            <img src={deal.imageUrl} alt={deal.title} style={{ width: "100%", height: "auto", borderRadius: 8, marginBottom: 8, display: "block" }} />
+          {deal.imageUrls.length > 0 && (
+            <div style={{ position: "relative", marginBottom: 8 }}>
+              <img src={deal.imageUrls[0]} alt={deal.title} style={{ width: "100%", height: "auto", borderRadius: 8, display: "block" }} />
+              {deal.imageUrls.length > 1 && (
+                <span style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20 }}>
+                  📷 {deal.imageUrls.length}
+                </span>
+              )}
+            </div>
           )}
           <div style={styles.metaRow}>
             <span onClick={e => { e.stopPropagation(); setShowComments(s => !s); }} style={styles.commentToggle}>

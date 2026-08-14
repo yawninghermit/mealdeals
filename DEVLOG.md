@@ -115,3 +115,66 @@ until these are done by hand:
 
 Keep `mealdeals.vercel.app` alive and redirecting for a while — old shared deal links
 (`?deal=<id>`) are already circulating and will 404 otherwise.
+
+## 2026-08-14 — Multiple photos per deal; numeric normal-price field
+
+**Multiple photos.** Deals could only ever carry one image (`deals.image_url`).
+Added `deals.image_urls text[]` (`supabase/add_multiple_deal_images.sql`) and reworked
+the post form to accept up to 5.
+
+`image_url` is deliberately kept and mirrored to `image_urls[1]` on every write, rather
+than dropped: `middleware.js` reads it directly to build the `og:image` for link
+previews, so dropping it would break the unfurl on every deal link already shared.
+Reads go through a new `dealImageUrls()` helper that falls back to `image_url` when the
+array is empty, so pre-migration rows render without a special case.
+
+Client changes (`src/App.jsx`):
+- `imageFile`/`imagePreview` (single) replaced by one `images` array of
+  `{ id, url, file? }` — `file` set only for photos picked this session and not yet
+  uploaded, in which case `url` is an object URL. Object URLs are revoked on removal,
+  form reset, and when opening a different deal for edit.
+- Post form shows a thumbnail grid with per-photo remove buttons and a "Cover" badge on
+  the first, since that one becomes `image_url`. Reordering isn't supported yet — to
+  change the cover you remove and re-add.
+- Deal detail uses a new `ImageGallery` component: scroll-snap strip with dot
+  indicators for 2+ photos, plain `<img>` for one. Feed cards still show only the first
+  photo, with a `📷 N` badge when there are more.
+- Account deletion now collects storage paths from both `image_url` and `image_urls`
+  (deduped) — it previously only cleaned up the single cover image, so extra photos
+  would have been orphaned in the bucket.
+
+Two bugs fixed while in here, both introduced-by-this-feature rather than pre-existing:
+- Upload paths were `${user.id}/${Date.now()}.${ext}`. Uploading several photos at once
+  lands them in the same millisecond, and combined with `upsert: true` the later upload
+  silently overwrote the earlier one. Paths now include a `crypto.randomUUID()` and
+  upload with `upsert: false`.
+- File validation was `file.type.startsWith("image/")`, which accepts `image/svg+xml` —
+  an SVG in a public bucket is a stored-XSS vector on the Supabase origin. Replaced with
+  an explicit allowlist (JPEG/PNG/WebP/GIF), shared by the picker and the uploader.
+  This is the client half of finding #4 from the July review; the bucket-level MIME
+  restriction in the Supabase dashboard is still the actual enforcement and still needs
+  doing.
+
+**Normal price.** Now numeric-only: a `sanitizeMoney()` helper strips anything that
+isn't a digit, allows a single decimal point, and caps at two decimal places, with the
+"$" re-applied for display. Field is `inputMode="decimal"` so mobile gets the number pad.
+It was always optional at the data layer (nullable, `.trim() || null`, no submit check),
+but nothing said so — the label now carries an explicit "(optional)" marker matching the
+Photos section. The *deal* price field is deliberately left as free text, since its
+placeholder invites values like "$1/slice" and "50% off".
+
+**Verified:** `npm run build` clean; app built with dummy Supabase credentials and
+loaded in headless Chromium — renders with no page errors (only the expected network
+failures to the dummy host). `npm run lint` shows the same 1 pre-existing error
+(`fetchDeals` used before declaration) and 3 warnings as master — nothing new.
+
+**Not verified:** the actual post/edit flow end-to-end. It needs a logged-in session
+against a real Supabase project, which this environment has no credentials for. Before
+trusting it, click-test: posting a deal with 3 photos, editing a deal to remove the
+middle photo, editing to remove all photos, and confirming a pre-migration single-photo
+deal still renders and can be edited without losing its image.
+
+**Deploy order matters:** run `supabase/add_multiple_deal_images.sql` in the Supabase
+SQL editor *before* deploying this code. The client writes `image_urls` on every
+insert/update and will fail with "column image_urls does not exist" until the column
+exists. The migration is backward-compatible, so running it early is safe.
