@@ -126,7 +126,7 @@ export default function App() {
   const [myComments, setMyComments] = useState([]);
   const [votedDeals, setVotedDeals] = useState({});
   const [mealFilter, setMealFilter] = useState("All");
-  const [dayFilter, setDayFilter] = useState([DAYS_SHORT[new Date().getDay()]]);
+  const [dayFilter, setDayFilter] = useState([]);
   const [savedDealIds, setSavedDealIds] = useState(new Set());
 
   const [searchQuery, setSearchQuery] = useState("");
