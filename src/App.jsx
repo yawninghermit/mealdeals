@@ -1526,9 +1526,6 @@ export default function App() {
                   replyText={replyText} setReplyText={setReplyText}
                   onComment={handleComment} onDelete={handleDeleteComment} onReport={openReport} styles={styles} />
               ))}
-              {openDeal.comments.filter(c => !c.parent_id).length === 0 && (
-                <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 12 }}>No comments yet — be the first!</div>
-              )}
               {user ? (
                 <>
                   <div style={styles.inputRow}>
