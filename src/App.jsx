@@ -915,7 +915,6 @@ export default function App() {
     successBanner: { background: "#eaf3de", border: "1px solid #97c459", color: "#3b6d11", borderRadius: 12, padding: "16px 20px", textAlign: "center", fontSize: 15, fontWeight: 700, marginBottom: 16 },
     backBtn: { display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-muted)", cursor: "pointer", marginBottom: 16, background: "none", border: "none", fontFamily: "inherit", padding: 0 },
     emptyState: { textAlign: "center", padding: "60px 20px", color: "var(--text-muted)" },
-    includesRow: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 },
     includeBadge: { background: "#e6f1fb", border: "1px solid #85b7eb", color: "#185fa5", fontSize: 11, padding: "2px 8px", borderRadius: 20 },
     expiredBadge: { display: "inline-flex", alignItems: "center", gap: 4, background: "#fdecea", border: "1px solid #e24b4a", color: "#a32d2d", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap" },
     policyText: { fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 12 },
@@ -1449,12 +1448,9 @@ export default function App() {
                   {openDeal.normalPrice && <span style={{ ...styles.badge, position: "relative", overflow: "hidden", border: "1px solid #000" }}>{openDeal.normalPrice}<span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom left, transparent calc(50% - 0.5px), var(--text-muted) calc(50% - 0.5px), var(--text-muted) calc(50% + 0.5px), transparent calc(50% + 0.5px))", pointerEvents: "none" }} /></span>}
                   <span style={styles.priceBadge}>{openDeal.price}</span>
                   {(openDeal.mealTimes || []).map(m => <span key={m} style={styles.badge}>{m}</span>)}
+                  {openDeal.includes.map(inc => <span key={inc} style={styles.includeBadge}>✓ {inc}</span>)}
                   {openDeal.verified && <span style={styles.verified}>✓ Verified</span>}
                 </div>
-                {openDeal.images.map((src, i) => (
-                  <img key={src} src={src} alt={`${openDeal.title} photo ${i + 1}`} loading={i === 0 ? undefined : "lazy"}
-                    style={{ width: "100%", height: "auto", borderRadius: 10, marginBottom: 12, display: "block" }} />
-                ))}
                 <div style={{ fontSize: 15, color: "var(--text)", marginBottom: 12, lineHeight: 1.6 }}>{openDeal.description}</div>
                 {openDeal.days.length > 0 && (
                   <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
@@ -1507,11 +1503,10 @@ export default function App() {
                     </button>
                   </div>
                 )}
-                {openDeal.includes.length > 0 && (
-                  <div style={styles.includesRow}>
-                    {openDeal.includes.map(inc => <span key={inc} style={styles.includeBadge}>✓ {inc}</span>)}
-                  </div>
-                )}
+                {openDeal.images.map((src, i) => (
+                  <img key={src} src={src} alt={`${openDeal.title} photo ${i + 1}`} loading={i === 0 ? undefined : "lazy"}
+                    style={{ width: "100%", height: "auto", borderRadius: 10, marginTop: 12, display: "block" }} />
+                ))}
               </div>
             </div>
 
